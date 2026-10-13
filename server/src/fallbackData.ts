@@ -1,0 +1,187 @@
+export const FALLBACK_ROOMS = [
+  { id: 1, roomCode: '1', name: 'Zimmer 1', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Haupthaus', sortOrder: 1, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 2, roomCode: '2', name: 'Zimmer 2', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Haupthaus', sortOrder: 2, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 3, roomCode: '4', name: 'Zimmer 4', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 90.0, floor: 'Haupthaus', sortOrder: 3, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 4, roomCode: '5', name: 'Zimmer 5', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 90.0, floor: 'Haupthaus', sortOrder: 4, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 5, roomCode: 'Tobias', name: 'Zimmer Tobias', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 95.0, floor: 'Nebengebäude', sortOrder: 5, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 6, roomCode: 'Annie', name: 'Zimmer Annie', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 95.0, floor: 'Nebengebäude', sortOrder: 6, housekeepingStatus: 'dirty', specialCleaningNote: null },
+  { id: 7, roomCode: 'Herman', name: 'Zimmer Herman', categoryCode: 'TBZ', categoryName: 'Dreibettzimmer', baseBeds: 3, maxCapacity: 3, basePrice: 110.0, floor: 'Nebengebäude', sortOrder: 7, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 8, roomCode: 'Prinze', name: 'Prinzessin von Sachsen Stube', categoryCode: 'TBZ', categoryName: 'Dreibettzimmer', baseBeds: 2, maxCapacity: 4, basePrice: 130.0, floor: 'Stuben', sortOrder: 8, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 9, roomCode: 'Stall', name: 'Stall Suite', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 3, basePrice: 120.0, floor: 'Hof', sortOrder: 9, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 10, roomCode: 'Scheun', name: 'Scheune', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 4, basePrice: 140.0, floor: 'Hof', sortOrder: 10, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 11, roomCode: 'Schupp', name: 'Schuppen', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Hof', sortOrder: 11, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 12, roomCode: 'Heubod', name: 'Heuboden', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 4, basePrice: 135.0, floor: 'Hof', sortOrder: 12, housekeepingStatus: 'clean', specialCleaningNote: 'Keine Wäsche' },
+  { id: 13, roomCode: 'Kammer', name: 'Gesinde Kammer', categoryCode: 'EZ', categoryName: 'Einzelzimmer', baseBeds: 1, maxCapacity: 1, basePrice: 65.0, floor: 'Hof', sortOrder: 13, housekeepingStatus: 'clean', specialCleaningNote: null },
+  { id: 14, roomCode: 'Luisa', name: 'Suite Luisa', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 3, basePrice: 125.0, floor: 'Haupthaus', sortOrder: 14, housekeepingStatus: 'clean', specialCleaningNote: null },
+];
+
+export const FALLBACK_GUESTS = [
+  {
+    id: 1,
+    guestNumber: '178847',
+    searchName: 'David',
+    titleCode: 1,
+    salutation: 'Sehr geehrter Herr',
+    lastName: 'David',
+    firstName: 'Klaus',
+    street: 'Marktplatz 4',
+    zipCode: '96264',
+    city: 'Altenkunstadt',
+    country: 'Deutschland',
+    phone: '09572-12345',
+    email: 'klaus.david@example.de',
+    isRegularGuest: 1,
+    isTaxExempt: 0,
+    createdAt: '2026-10-12T00:00:00Z'
+  },
+  {
+    id: 2,
+    guestNumber: '18506',
+    searchName: 'Junghans',
+    titleCode: 3,
+    salutation: 'Sehr geehrte Familie',
+    lastName: 'Junghans',
+    firstName: 'Torsten',
+    street: 'Lindenallee 12',
+    zipCode: '04109',
+    city: 'Leipzig',
+    country: 'Deutschland',
+    phone: '0341-987654',
+    email: 'junghans.familie@example.de',
+    isRegularGuest: 0,
+    isTaxExempt: 0,
+    createdAt: '2026-10-10T00:00:00Z'
+  },
+  {
+    id: 3,
+    guestNumber: '117799',
+    searchName: 'Hanse Touristik',
+    titleCode: 4,
+    salutation: 'Sehr geehrte Damen und Herren',
+    lastName: 'Langerwisch',
+    firstName: 'Marion',
+    name2: 'Hanse Touristik Hamburg GmbH',
+    street: 'Hafenstraße 100',
+    zipCode: '20457',
+    city: 'Hamburg',
+    country: 'Deutschland',
+    phone: '040-5551234',
+    email: 'info@hanse-touristik.de',
+    isRegularGuest: 1,
+    isTaxExempt: 0,
+    createdAt: '2026-10-05T00:00:00Z'
+  }
+];
+
+export const FALLBACK_RESERVATIONS = [
+  {
+    id: 1,
+    reservationNumber: '178840',
+    guestId: 3,
+    roomId: 3, // Zimmer 4
+    arrivalDate: '2026-10-05',
+    departureDate: '2026-10-10',
+    nights: 5,
+    adultsCount: 2,
+    childrenCount: 0,
+    priceVariant: 'Doppelt belegt',
+    pricePerNight: 90.0,
+    totalPrice: 450.0,
+    isArrived: 1,
+    isDeparted: 0,
+    isWrittenReservation: 1,
+    isLockedToRoom: 0,
+    hasBreakfast: 1,
+    breakfastCount: 2,
+    billingDebitor: 'Hanse Touristik Hamburg GmbH',
+    guest: FALLBACK_GUESTS[2],
+    room: FALLBACK_ROOMS[2]
+  },
+  {
+    id: 2,
+    reservationNumber: '18506',
+    guestId: 2,
+    roomId: 7, // Zimmer Herman
+    arrivalDate: '2026-10-10',
+    departureDate: '2026-10-15',
+    nights: 5,
+    adultsCount: 2,
+    childrenCount: 1,
+    companionNames: 'Aline, Torsten und Lea',
+    priceVariant: 'Dreifach belegt',
+    pricePerNight: 166.0,
+    totalPrice: 830.0,
+    isArrived: 1,
+    isDeparted: 0,
+    isWrittenReservation: 1,
+    isLockedToRoom: 0,
+    dailyArrangement: 'Angebot F/ 2 Gang',
+    billingDebitor: 'Junghans',
+    guest: FALLBACK_GUESTS[1],
+    room: FALLBACK_ROOMS[6]
+  },
+  {
+    id: 3,
+    reservationNumber: '18520',
+    guestId: 1,
+    roomId: 8, // Prinze
+    arrivalDate: '2026-10-12',
+    departureDate: '2026-10-13',
+    nights: 1,
+    adultsCount: 1,
+    childrenCount: 0,
+    priceVariant: 'Einfach belegt',
+    pricePerNight: 130.0,
+    totalPrice: 130.0,
+    isArrived: 0,
+    isDeparted: 0,
+    isWrittenReservation: 1,
+    isLockedToRoom: 1,
+    hasBreakfast: 1,
+    breakfastCount: 1,
+    billingDebitor: 'David',
+    guest: FALLBACK_GUESTS[0],
+    room: FALLBACK_ROOMS[7]
+  }
+];
+
+export const FALLBACK_PRICE_VARIANTS = [
+  { id: 1, variantNumber: 1, name: 'Doppelt belegt', shortCode: 'Doppelt belegt', isFlatRate: 0 },
+  { id: 2, variantNumber: 2, name: 'Einfach belegt', shortCode: 'Einfach belegt', isFlatRate: 0 },
+  { id: 3, variantNumber: 3, name: 'Dreifach belegt', shortCode: 'Dreifach belegt', isFlatRate: 0 },
+  { id: 4, variantNumber: 5, name: 'ohne F&B 1 Person', shortCode: 'ohne F&B 1 Pers', isFlatRate: 0 },
+  { id: 5, variantNumber: 6, name: 'ohne F&B 2 Personen', shortCode: 'ohne F&B 2 Pers', isFlatRate: 0 },
+  { id: 6, variantNumber: 7, name: 'Online', shortCode: 'Online', isFlatRate: 0 },
+];
+
+export const FALLBACK_SALUTATIONS = [
+  { id: 1, salutationNumber: 1, addressText: 'Herr', letterGreeting: 'Sehr geehrter Herr', code: '1100' },
+  { id: 2, salutationNumber: 2, addressText: 'Frau', letterGreeting: 'Sehr geehrte Frau', code: '1100' },
+  { id: 3, salutationNumber: 3, addressText: 'Familie', letterGreeting: 'Sehr geehrte Familie', code: '1100' },
+  { id: 4, salutationNumber: 4, addressText: 'Firma', letterGreeting: 'Sehr geehrte Damen und Herren', code: '1000' },
+  { id: 5, salutationNumber: 6, addressText: 'Herr Dr.', letterGreeting: 'Sehr geehrter Herr Dr.', code: '1100' },
+  { id: 6, salutationNumber: 7, addressText: 'Frau Dr.', letterGreeting: 'Sehr geehrte Frau Dr.', code: '1100' },
+  { id: 7, salutationNumber: 8, addressText: 'Herr Prof.', letterGreeting: 'Sehr geehrter Herr Prof.', code: '1100' },
+];
+
+export const FALLBACK_INVOICES = [
+  {
+    id: 1,
+    invoiceNumber: '117799',
+    reservationId: 1,
+    guestId: 3,
+    invoiceDate: '2026-10-09',
+    servicePeriodStart: '2026-10-05',
+    servicePeriodEnd: '2026-10-10',
+    netLodging: 420.56,
+    taxLodging: 29.44,
+    netService: 21.01,
+    taxService: 3.99,
+    cityTaxAmount: 22.50,
+    totalGross: 497.50,
+    paymentMethod: 'BAR',
+    isPaid: 1,
+    guest: FALLBACK_GUESTS[2],
+    reservation: FALLBACK_RESERVATIONS[0]
+  }
+];

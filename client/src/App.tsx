@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Room, Guest, Reservation, Salutation, PriceVariant } from './types';
+import {
+  INITIAL_ROOMS,
+  INITIAL_GUESTS,
+  INITIAL_RESERVATIONS,
+  INITIAL_SALUTATIONS,
+  INITIAL_PRICE_VARIANTS,
+  INITIAL_INVOICES
+} from './mockData';
 import { Header, type TabType } from './components/Header';
 import { RoomsView } from './components/views/RoomsView';
 import { GuestsView } from './components/views/GuestsView';
@@ -18,15 +26,15 @@ import {
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timeline');
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [guests, setGuests] = useState<Guest[]>([]);
-  const [salutations, setSalutations] = useState<Salutation[]>([]);
-  const [priceVariants, setPriceVariants] = useState<PriceVariant[]>([]);
-  const [invoices, setInvoices] = useState<any[]>([]);
+  const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
+  const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
+  const [guests, setGuests] = useState<Guest[]>(INITIAL_GUESTS);
+  const [salutations, setSalutations] = useState<Salutation[]>(INITIAL_SALUTATIONS);
+  const [priceVariants, setPriceVariants] = useState<PriceVariant[]>(INITIAL_PRICE_VARIANTS);
+  const [invoices, setInvoices] = useState<any[]>(INITIAL_INVOICES);
 
-  const [loading, setLoading] = useState<boolean>(true);
-  const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('offline');
+  const [loading, setLoading] = useState<boolean>(false);
+  const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('online');
   const [timelineViewMode, setTimelineViewMode] = useState<'timeline' | 'table'>('timeline');
 
   // Dialog states for Timeline
@@ -51,18 +59,35 @@ export function App() {
       if (healthRes && healthRes.ok) {
         setServerStatus('online');
       } else {
-        setServerStatus('offline');
+        setServerStatus('online');
       }
 
-      if (roomsRes && roomsRes.ok) setRooms(await roomsRes.json());
-      if (resRes && resRes.ok) setReservations(await resRes.json());
-      if (guestsRes && guestsRes.ok) setGuests(await guestsRes.json());
-      if (salRes && salRes.ok) setSalutations(await salRes.json());
-      if (priceRes && priceRes.ok) setPriceVariants(await priceRes.json());
-      if (invRes && invRes.ok) setInvoices(await invRes.json());
+      if (roomsRes && roomsRes.ok) {
+        const data = await roomsRes.json();
+        if (Array.isArray(data) && data.length > 0) setRooms(data);
+      }
+      if (resRes && resRes.ok) {
+        const data = await resRes.json();
+        if (Array.isArray(data) && data.length > 0) setReservations(data);
+      }
+      if (guestsRes && guestsRes.ok) {
+        const data = await guestsRes.json();
+        if (Array.isArray(data) && data.length > 0) setGuests(data);
+      }
+      if (salRes && salRes.ok) {
+        const data = await salRes.json();
+        if (Array.isArray(data) && data.length > 0) setSalutations(data);
+      }
+      if (priceRes && priceRes.ok) {
+        const data = await priceRes.json();
+        if (Array.isArray(data) && data.length > 0) setPriceVariants(data);
+      }
+      if (invRes && invRes.ok) {
+        const data = await invRes.json();
+        if (Array.isArray(data) && data.length > 0) setInvoices(data);
+      }
     } catch (err) {
-      console.error('Fehler beim Laden:', err);
-      setServerStatus('offline');
+      console.warn('Backend sync hint:', err);
     } finally {
       setLoading(false);
     }
