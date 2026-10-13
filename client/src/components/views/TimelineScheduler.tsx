@@ -123,7 +123,7 @@ const BookingBar: React.FC<BookingBarProps> = ({
 
       <div className="flex items-center gap-1 shrink-0 ml-1">
         {isLocked ? (
-          <Lock className="w-3 h-3 text-amber-950/80" title="Fest gebucht (Gesperrt)" />
+          <span title="Fest gebucht (Gesperrt)"><Lock className="w-3 h-3 text-amber-950/80" /></span>
         ) : (
           <span className="text-[9px] opacity-70 hidden xl:inline">↔</span>
         )}

@@ -13,6 +13,7 @@ interface ActionBarProps {
   canEdit?: boolean;
   canDelete?: boolean;
   canSelect?: boolean;
+  canCopy?: boolean;
   selectLabel?: string;
   editLabel?: string;
 }
@@ -29,6 +30,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   canEdit = true,
   canDelete = true,
   canSelect = true,
+  canCopy = true,
   selectLabel = '[F6] Wählen',
   editLabel = '[F9] Ändern',
 }) => {

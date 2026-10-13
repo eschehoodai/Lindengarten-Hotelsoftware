@@ -6,10 +6,11 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = path.resolve(__dirname, '../../../lindengarten.db');
+const defaultLocalDbPath = path.resolve(__dirname, '../../../lindengarten.db');
 
 export const client = createClient({
-  url: `file:${dbPath}`,
+  url: process.env.DATABASE_URL || `file:${defaultLocalDbPath}`,
+  authToken: process.env.DATABASE_AUTH_TOKEN,
 });
 
 export const db = drizzle(client, { schema });

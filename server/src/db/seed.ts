@@ -228,21 +228,24 @@ async function seedData() {
   const guest1 = await client.execute({
     sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
           VALUES ('178847', 'David', 1, 'Sehr geehrter Herr', 'David', 'Klaus', '', 'Marktplatz 4', '96264', 'Altenkunstadt', 'Deutschland', '09572-12345', 'klaus.david@example.de', 1, datetime('now'))
-          RETURNING id;`
+          RETURNING id;`,
+    args: []
   });
   const guest1Id = Number(guest1.rows[0].id);
 
   const guest2 = await client.execute({
     sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
           VALUES ('18506', 'Junghans', 3, 'Sehr geehrte Familie', 'Junghans', 'Torsten', '', 'Lindenallee 12', '04109', 'Leipzig', 'Deutschland', '0341-987654', 'junghans.familie@example.de', 0, datetime('now'))
-          RETURNING id;`
+          RETURNING id;`,
+    args: []
   });
   const guest2Id = Number(guest2.rows[0].id);
 
   const guest3 = await client.execute({
     sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
           VALUES ('117799', 'Hanse Touristik', 4, 'Sehr geehrte Damen und Herren', 'Langerwisch', 'Marion', 'Hanse Touristik Hamburg GmbH', 'Hafenstraße 100', '20457', 'Hamburg', 'Deutschland', '040-5551234', 'info@hanse-touristik.de', 1, datetime('now'))
-          RETURNING id;`
+          RETURNING id;`,
+    args: []
   });
   const guest3Id = Number(guest3.rows[0].id);
 

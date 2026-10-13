@@ -5,7 +5,7 @@ import {
   calculateLeipzigCityTax,
   calculateInvoiceSummary,
   generateDefaultFolioItems,
-  InvoiceLineItem,
+  type InvoiceLineItem,
 } from './taxEngine';
 
 describe('1. Kaufmännische Rundung & USt-Splitting (§ 12 UStG)', () => {
