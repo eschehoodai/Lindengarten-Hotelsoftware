@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   DndContext, 
   useDraggable, 
@@ -23,7 +23,7 @@ interface TimelineSchedulerProps {
   reservations: Reservation[];
   guests: Guest[];
   priceVariants: PriceVariant[];
-  onSaveReservation: (data: Partial<Reservation>) => Promise<void>;
+  onSaveReservation: (data: Partial<Reservation>) => Promise<any>;
   onDeleteReservation: (id: number) => Promise<void>;
   onUpdateRoom: (room: Room) => Promise<void>;
   onRefresh: () => void;
@@ -103,29 +103,30 @@ const BookingBar: React.FC<BookingBarProps> = ({
         e.stopPropagation();
         onDoubleClick(reservation);
       }}
-      className={`h-7 my-auto rounded shadow-xs border px-1.5 flex items-center justify-between text-[11px] font-sans font-bold z-10 transition-all cursor-pointer ${barBg} ${
+      className={`h-9 my-auto rounded shadow-xs border px-2 flex items-center justify-between text-xs font-sans font-bold z-10 transition-all cursor-pointer ${barBg} ${
         isSelected ? 'ring-2 ring-blue-400 ring-offset-1 scale-[1.01]' : ''
       }`}
       title={`${guestName}, ${firstName} | ${reservation.arrivalDate} bis ${reservation.departureDate} (${reservation.nights} Ü) | Zimmer: ${room.name} ${
         isLocked ? '🔒 Fest gebucht (Drag-and-Drop gesperrt)' : '↔ Zum Verschieben auf ein anderes Zimmer ziehen'
       }`}
     >
-      <div className="flex items-center gap-1 truncate">
+      <div className="flex items-center gap-1.5 truncate">
         {/* Status-Buchstabe r (Magenta) aus Bild 01 */}
         {!isArrived && !isDeparted && (
-          <span className="font-mono font-black text-fuchsia-950 bg-fuchsia-200 px-1 rounded text-[10px] shrink-0" title="Reserviert">
+          <span className="font-mono font-black text-fuchsia-950 bg-fuchsia-200 px-1 py-0.5 rounded text-[10px] shrink-0" title="Reserviert">
             r
           </span>
         )}
-        {isArrived && <CheckCircle2 className="w-3.5 h-3.5 text-white shrink-0" />}
-        <span className="truncate">{guestName} ({reservation.nights}Ü)</span>
+        {isArrived && <CheckCircle2 className="w-4 h-4 text-white shrink-0" />}
+        {isDeparted && <Clock className="w-3.5 h-3.5 text-white/80 shrink-0" />}
+        <span className="truncate text-xs font-bold leading-none">{guestName} ({reservation.nights}Ü)</span>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0 ml-1">
+      <div className="flex items-center gap-1 shrink-0 ml-1.5">
         {isLocked ? (
-          <span title="Fest gebucht (Gesperrt)"><Lock className="w-3 h-3 text-amber-950/80" /></span>
+          <span title="Fest gebucht (Gesperrt)"><Lock className="w-3.5 h-3.5 text-amber-950/80" /></span>
         ) : (
-          <span className="text-[9px] opacity-70 hidden xl:inline">↔</span>
+          <span className="text-[10px] opacity-70 hidden xl:inline">↔</span>
         )}
       </div>
     </div>
@@ -154,8 +155,8 @@ const RoomRowDroppable: React.FC<RoomRowDroppableProps> = ({
   return (
     <div
       ref={setNodeRef}
-      className={`relative grid h-9 border-b border-slate-200 transition-colors ${
-        isOver ? 'bg-blue-100/70 ring-1 ring-blue-400' : 'hover:bg-slate-50'
+      className={`relative grid h-full border-b border-slate-200 transition-colors ${
+        isOver ? 'bg-blue-100/70 ring-2 ring-blue-500 ring-inset z-10' : 'hover:bg-slate-50'
       }`}
       style={{ gridTemplateColumns: `repeat(${days.length}, minmax(32px, 1fr))` }}
     >
@@ -164,7 +165,7 @@ const RoomRowDroppable: React.FC<RoomRowDroppableProps> = ({
         <div
           key={dayNum}
           onClick={() => onCellClick(room, dayNum)}
-          className={`border-r border-slate-200/60 h-full cursor-cell transition-colors hover:bg-blue-50/50 ${
+          className={`border-r border-slate-200/60 h-full cursor-cell transition-colors hover:bg-blue-100/40 ${
             isWeekend ? 'bg-rose-50/40' : ''
           }`}
           title={`Zimmer ${room.name} am Tag ${dayNum} belegen`}
@@ -207,6 +208,33 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [newResPreset, setNewResPreset] = useState<Partial<Reservation> | null>(null);
 
+  // Synchronisiertes vertikales Scrollen (Zimmer-Spalte & Kalender-Matrix)
+  const leftColRef = useRef<HTMLDivElement>(null);
+  const gridBodyRef = useRef<HTMLDivElement>(null);
+  const isSyncingScroll = useRef(false);
+
+  const handleGridScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (leftColRef.current) {
+      leftColRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
+  };
+
+  const handleLeftColScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    if (gridBodyRef.current) {
+      gridBodyRef.current.scrollTop = e.currentTarget.scrollTop;
+    }
+    requestAnimationFrame(() => {
+      isSyncingScroll.current = false;
+    });
+  };
+
   // Monatsberechnung
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -236,6 +264,50 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
   const handleToday = () => {
     setCurrentDate(new Date(2026, 9, 1)); // Oktober 2026 Fokus
   };
+
+  // Tastatursteuerung für F6-F9 in Timeline
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isStatusOpen || isEditOpen) return;
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+      if (isInput) return;
+
+      if (e.key === 'F6') {
+        if (selectedRes) {
+          e.preventDefault();
+          setIsStatusOpen(true);
+        }
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        setNewResPreset(null);
+        setIsEditOpen(true);
+      } else if (e.key === 'F8') {
+        if (selectedRes) {
+          e.preventDefault();
+          setNewResPreset({
+            ...selectedRes,
+            id: undefined,
+            reservationNumber: `18${Math.floor(100 + Math.random() * 900)}`,
+          });
+          setIsEditOpen(true);
+        }
+      } else if (e.key === 'F9') {
+        if (selectedRes) {
+          e.preventDefault();
+          setNewResPreset(selectedRes);
+          setIsEditOpen(true);
+        }
+      } else if (e.key === 'Delete') {
+        if (selectedRes) {
+          e.preventDefault();
+          const confirm = window.confirm(`Buchung ${selectedRes.reservationNumber} stornieren?`);
+          if (confirm) onDeleteReservation(selectedRes.id);
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isStatusOpen, isEditOpen, selectedRes, onDeleteReservation]);
 
   // Drag Start
   const handleDragStart = (event: DragStartEvent) => {
@@ -395,41 +467,37 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
         <div className="flex-1 flex min-h-0 bg-white overflow-hidden border-b border-slate-300">
           
           {/* LINKE SPALTE: ZIMMER-STAMM (Y-Achse) */}
-          <div className="w-48 border-r border-slate-300 flex flex-col shrink-0 bg-slate-50 z-20 shadow-xs">
+          <div className="w-52 border-r border-slate-300 flex flex-col shrink-0 bg-slate-50 z-20 shadow-xs">
             {/* Kopf Zelle */}
-            <div className="h-10 border-b border-slate-300 bg-slate-200 px-3 flex items-center justify-between text-xs font-bold text-slate-700">
+            <div className="h-10 border-b border-slate-300 bg-slate-200 px-3 flex items-center justify-between text-xs font-bold text-slate-700 shrink-0">
               <span>Zimmer</span>
               <span className="text-[10px] text-slate-500 font-mono font-normal">Kategorie</span>
             </div>
 
-            {/* Zimmer-Liste */}
-            <div className="flex-1 overflow-hidden divide-y divide-slate-200">
+            {/* Zimmer-Liste mit optimaler Zeilenhöhe: nur Zimmername links & Kategorie rechts */}
+            <div 
+              ref={leftColRef}
+              className="flex-1 min-h-0 overflow-hidden grid"
+              style={{
+                gridTemplateRows: rooms.length > 0 ? `repeat(${rooms.length}, minmax(38px, 1fr))` : undefined,
+              }}
+            >
               {rooms.map((room) => {
-                const isDirty = room.housekeepingStatus === 'dirty';
                 return (
                   <div
                     key={room.id}
-                    className="h-9 px-2 flex items-center justify-between text-xs hover:bg-slate-100 transition-colors"
+                    className="h-full px-3 flex items-center justify-between text-xs hover:bg-slate-100 transition-colors border-b border-slate-200 min-w-0"
                   >
-                    <div className="flex items-center gap-1.5 truncate">
-                      <span className="font-mono font-bold text-blue-900 w-12 truncate text-[11px]">
-                        {room.roomCode}
-                      </span>
-                      <span className="font-sans font-semibold text-slate-800 truncate text-[11px]" title={room.name}>
-                        {room.name}
-                      </span>
-                    </div>
+                    <span 
+                      className="font-sans font-semibold text-slate-800 truncate text-xs min-w-0 pr-2" 
+                      title={room.name}
+                    >
+                      {room.name}
+                    </span>
 
-                    <div className="flex items-center gap-1 shrink-0">
-                      {isDirty && (
-                        <span className="bg-amber-100 text-amber-800 text-[9px] px-1 rounded font-bold" title="Reinigung ausstehend">
-                          Dirty
-                        </span>
-                      )}
-                      <span className="text-[10px] text-slate-500 font-mono">
-                        {room.categoryCode}
-                      </span>
-                    </div>
+                    <span className="text-[10px] text-slate-600 font-mono font-bold bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 shrink-0">
+                      {room.categoryCode}
+                    </span>
                   </div>
                 );
               })}
@@ -457,8 +525,15 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
               ))}
             </div>
 
-            {/* ZEILEN DER ZIMMER MIT BUCHUNGSBALKEN */}
-            <div className="flex-1 overflow-y-auto">
+            {/* ZEILEN DER ZIMMER MIT BUCHUNGSBALKEN (vollständig abgestimmt auf die Zimmerspalte) */}
+            <div 
+              ref={gridBodyRef}
+              onScroll={handleGridScroll}
+              className="flex-1 min-h-0 overflow-y-auto grid"
+              style={{
+                gridTemplateRows: rooms.length > 0 ? `repeat(${rooms.length}, minmax(38px, 1fr))` : undefined,
+              }}
+            >
               {rooms.map((room) => {
                 // Finde alle Reservierungen dieses Zimmers
                 const roomReservations = reservations.filter((r) => r.roomId === room.id);
@@ -481,7 +556,8 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                         onSelect={(r) => setSelectedRes(r)}
                         onDoubleClick={(r) => {
                           setSelectedRes(r);
-                          setIsStatusOpen(true);
+                          setNewResPreset(r);
+                          setIsEditOpen(true);
                         }}
                       />
                     ))}
@@ -497,7 +573,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
         {/* Drag Overlay Vorschau */}
         <DragOverlay>
           {activeDragRes ? (
-            <div className="h-7 bg-blue-600 text-white font-bold text-xs rounded px-2 flex items-center shadow-2xl opacity-90 border border-blue-400">
+            <div className="h-9 bg-blue-600 text-white font-bold text-xs rounded px-2.5 flex items-center shadow-2xl opacity-90 border border-blue-400">
               <span>↔ {activeDragRes.guest?.lastName || activeDragRes.last_name} ({activeDragRes.nights}Ü)</span>
             </div>
           ) : null}
@@ -514,11 +590,11 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
             <span className="text-slate-200">
               Reservierung auf:{' '}
               <strong className="text-white font-sans">
-                [{selectedRes.reservationNumber}] {selectedRes.guest?.lastName || selectedRes.last_name}, {selectedRes.guest?.firstName || selectedRes.first_name}
+                [{selectedRes.reservationNumber || '—'}] {selectedRes.guest?.lastName || selectedRes.last_name || 'Gast'}, {selectedRes.guest?.firstName || selectedRes.first_name || ''}
               </strong>
             </span>
             <span className="text-slate-400">
-              ({selectedRes.nights}Ü/{selectedRes.adultsCount}P. (GPr.: {selectedRes.totalPrice.toFixed(2)} €) / Z:{selectedRes.room_code || rooms.find(r => r.id === selectedRes.roomId)?.roomCode})
+              ({selectedRes.nights || 1}Ü/{selectedRes.adultsCount || 1}P. (GPr.: {(Number(selectedRes.totalPrice) || 0).toFixed(2)} €) / Z:{selectedRes.room_code || rooms.find(r => r.id === selectedRes.roomId)?.roomCode || '?'})
             </span>
             {selectedRes.companionNames && (
               <span className="text-amber-300 text-[11px] font-sans">

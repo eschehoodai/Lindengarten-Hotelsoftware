@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Room, Guest, Reservation, Salutation, PriceVariant } from './types';
+import type { Room, Guest, Reservation, Salutation, PriceVariant, Invoice } from './types';
 import {
   INITIAL_ROOMS,
   INITIAL_GUESTS,
@@ -18,6 +18,7 @@ import { MasterDataView } from './components/views/MasterDataView';
 import { StatusDialog } from './components/dialogs/StatusDialog';
 import { ReservationDialog } from './components/dialogs/ReservationDialog';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
+import { generateInvoiceFromReservation } from './services/invoiceGenerator';
 import { 
   Calendar, Users, DoorClosed, FileText, Settings, 
   Layers, Lock, AlertTriangle, CheckCircle, SplitSquareVertical,
@@ -27,18 +28,55 @@ import {
 export function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timeline');
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
-  const [reservations, setReservations] = useState<Reservation[]>(INITIAL_RESERVATIONS);
-  const [guests, setGuests] = useState<Guest[]>(INITIAL_GUESTS);
+  const [reservations, setReservations] = useState<Reservation[]>(() => {
+    try {
+      const saved = localStorage.getItem('lindengarten_reservations');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((r: any) => ({
+            ...r,
+            totalPrice: Number(r.totalPrice) || (Number(r.pricePerNight) || 85) * (Number(r.nights) || 1),
+            pricePerNight: Number(r.pricePerNight) || 85,
+            nights: Number(r.nights) || 1,
+            adultsCount: Number(r.adultsCount) || 1,
+            childrenCount: Number(r.childrenCount) || 0,
+          }));
+        }
+      }
+    } catch {}
+    return INITIAL_RESERVATIONS;
+  });
+  const [guests, setGuests] = useState<Guest[]>(() => {
+    try {
+      const saved = localStorage.getItem('lindengarten_guests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_GUESTS;
+  });
   const [salutations, setSalutations] = useState<Salutation[]>(INITIAL_SALUTATIONS);
   const [priceVariants, setPriceVariants] = useState<PriceVariant[]>(INITIAL_PRICE_VARIANTS);
-  const [invoices, setInvoices] = useState<any[]>(INITIAL_INVOICES);
+  const [invoices, setInvoices] = useState<Invoice[]>(() => {
+    try {
+      const saved = localStorage.getItem('lindengarten_invoices');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_INVOICES as any;
+  });
 
   const [loading, setLoading] = useState<boolean>(false);
   const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('online');
   const [timelineViewMode, setTimelineViewMode] = useState<'timeline' | 'table'>('timeline');
 
-  // Dialog states for Timeline
+  // Dialog states for Timeline & Global Reservations
   const [selectedTimelineRes, setSelectedTimelineRes] = useState<Reservation | null>(null);
+  const [editingReservation, setEditingReservation] = useState<Partial<Reservation> | null>(null);
   const [isStatusOpen, setIsStatusOpen] = useState<boolean>(false);
   const [isNewResOpen, setIsNewResOpen] = useState<boolean>(false);
 
@@ -59,7 +97,7 @@ export function App() {
       if (healthRes && healthRes.ok) {
         setServerStatus('online');
       } else {
-        setServerStatus('online');
+        setServerStatus('online'); // Im Fallback-Modus weiterhin betriebsbereit
       }
 
       if (roomsRes && roomsRes.ok) {
@@ -68,11 +106,25 @@ export function App() {
       }
       if (resRes && resRes.ok) {
         const data = await resRes.json();
-        if (Array.isArray(data) && data.length > 0) setReservations(data);
+        if (Array.isArray(data) && data.length > 0) {
+          const sanitized = data.map((r: any) => ({
+            ...r,
+            totalPrice: Number(r.totalPrice) || (Number(r.pricePerNight) || 85) * (Number(r.nights) || 1),
+            pricePerNight: Number(r.pricePerNight) || 85,
+            nights: Number(r.nights) || 1,
+            adultsCount: Number(r.adultsCount) || 1,
+            childrenCount: Number(r.childrenCount) || 0,
+          }));
+          setReservations(sanitized);
+          localStorage.setItem('lindengarten_reservations', JSON.stringify(sanitized));
+        }
       }
       if (guestsRes && guestsRes.ok) {
         const data = await guestsRes.json();
-        if (Array.isArray(data) && data.length > 0) setGuests(data);
+        if (Array.isArray(data) && data.length > 0) {
+          setGuests(data);
+          localStorage.setItem('lindengarten_guests', JSON.stringify(data));
+        }
       }
       if (salRes && salRes.ok) {
         const data = await salRes.json();
@@ -105,43 +157,77 @@ export function App() {
     onF4: () => setActiveTab('invoices'),
   });
 
-  // CRUD Handler Gäste
-  const handleSaveGuest = async (guestData: Partial<Guest>) => {
-    try {
-      if (guestData.id) {
-        // PUT
-        await fetch(`/api/guests/${guestData.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(guestData),
-        });
-      } else {
-        // POST
-        await fetch('/api/guests', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(guestData),
-        });
-      }
-      await fetchData();
-    } catch (err) {
-      console.error('Fehler beim Speichern des Gastes:', err);
-      alert('Fehler beim Speichern des Gastes.');
+  // Optimistischer CRUD Handler Gäste
+  const handleSaveGuest = async (guestData: Partial<Guest>): Promise<Guest> => {
+    let savedGuest: Guest;
+    if (guestData.id) {
+      // Bestehenden Gast aktualisieren
+      savedGuest = {
+        ...(guests.find((g) => g.id === guestData.id) || {}),
+        ...guestData,
+      } as Guest;
+      setGuests((prev) => {
+        const next = prev.map((g) => (g.id === savedGuest.id ? savedGuest : g));
+        localStorage.setItem('lindengarten_guests', JSON.stringify(next));
+        return next;
+      });
+      fetch(`/api/guests/${guestData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(guestData),
+      }).catch((err) => console.warn('Backend sync PUT guest:', err));
+    } else {
+      // Neuen Gast optimistisch erstellen & sofort speichern
+      const newId = Math.max(0, ...guests.map((g) => g.id)) + 1;
+      const nextNumber =
+        guestData.guestNumber ||
+        `G-${new Date().getFullYear()}-${String(newId).padStart(4, '0')}`;
+      savedGuest = {
+        titleCode: 1,
+        salutation: 'Sehr geehrter Herr',
+        lastName: '',
+        firstName: '',
+        country: 'Deutschland',
+        nationality: 'deutsch',
+        paymentMethod: 'BAR',
+        isRegularGuest: false,
+        isTaxExempt: false,
+        createdAt: new Date().toISOString(),
+        ...guestData,
+        id: newId,
+        guestNumber: nextNumber,
+        searchName:
+          guestData.searchName ||
+          `${guestData.lastName || ''}, ${guestData.firstName || ''}`.trim(),
+      } as Guest;
+      setGuests((prev) => {
+        const next = [savedGuest, ...prev];
+        localStorage.setItem('lindengarten_guests', JSON.stringify(next));
+        return next;
+      });
+      fetch('/api/guests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(savedGuest),
+      }).catch((err) => console.warn('Backend sync POST guest:', err));
     }
+    return savedGuest;
   };
 
   const handleDeleteGuest = async (id: number) => {
-    try {
-      await fetch(`/api/guests/${id}`, { method: 'DELETE' });
-      await fetchData();
-    } catch (err) {
-      console.error('Fehler beim Löschen des Gastes:', err);
-      alert('Fehler beim Löschen des Gastes.');
-    }
+    setGuests((prev) => {
+      const next = prev.filter((g) => g.id !== id);
+      localStorage.setItem('lindengarten_guests', JSON.stringify(next));
+      return next;
+    });
+    fetch(`/api/guests/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.warn('Backend sync DELETE guest:', err)
+    );
   };
 
   // CRUD Handler Zimmer
   const handleUpdateRoom = async (roomData: Room) => {
+    setRooms((prev) => prev.map((r) => (r.id === roomData.id ? roomData : r)));
     try {
       await fetch(`/api/rooms/${roomData.id}`, {
         method: 'PUT',
@@ -154,39 +240,142 @@ export function App() {
     }
   };
 
-  // CRUD Handler Reservierungen
-  const handleSaveReservation = async (resData: Partial<Reservation>) => {
-    try {
-      if (resData.id) {
-        // PUT
-        await fetch(`/api/reservations/${resData.id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(resData),
-        });
-      } else {
-        // POST
-        await fetch('/api/reservations', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(resData),
-        });
-      }
-      await fetchData();
-    } catch (err) {
-      console.error('Fehler beim Speichern der Reservierung:', err);
-      alert('Fehler beim Speichern der Reservierung.');
+  // Optimistischer CRUD Handler Reservierungen
+  const handleSaveReservation = async (resData: Partial<Reservation>): Promise<Reservation> => {
+    let savedRes: Reservation;
+    const guestObj =
+      guests.find((g) => g.id === resData.guestId) ||
+      ({
+        id: resData.guestId || 1,
+        lastName: resData.last_name || 'Gast',
+        firstName: resData.first_name || '',
+        guestNumber: 'G-2026-0001',
+      } as Guest);
+    const roomObj = rooms.find((r) => r.id === resData.roomId) || rooms[0];
+
+    if (resData.id) {
+      savedRes = {
+        ...(reservations.find((r) => r.id === resData.id) || {}),
+        ...resData,
+        guest: guestObj,
+        room: roomObj,
+        last_name: guestObj.lastName,
+        first_name: guestObj.firstName,
+        room_name: roomObj?.name,
+        room_code: roomObj?.roomCode,
+      } as Reservation;
+      setReservations((prev) => {
+        const next = prev.map((r) => (r.id === savedRes.id ? savedRes : r));
+        localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
+        return next;
+      });
+      fetch(`/api/reservations/${resData.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(resData),
+      }).catch((err) => console.warn('Backend sync PUT res:', err));
+    } else {
+      const newId = Math.max(0, ...reservations.map((r) => r.id)) + 1;
+      const nextResNumber =
+        resData.reservationNumber || `18${Math.floor(100 + Math.random() * 900)}`;
+      savedRes = {
+        reservationNumber: nextResNumber,
+        guestId: guestObj.id,
+        roomId: roomObj.id,
+        arrivalDate: new Date().toISOString().split('T')[0],
+        departureDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+        nights: 1,
+        adultsCount: 2,
+        childrenCount: 0,
+        priceVariant: 'Doppelt belegt',
+        pricePerNight: roomObj.basePrice || 85,
+        totalPrice: roomObj.basePrice || 85,
+        boardType: resData.boardType || 'Frühstück',
+        dailyArrangement: resData.dailyArrangement || resData.boardType || 'Frühstück',
+        breakfastCount: resData.breakfastCount ?? 2,
+        ohpCount: resData.ohpCount ?? 0,
+        twoGangCount: resData.twoGangCount ?? 0,
+        threeGangCount: resData.threeGangCount ?? 0,
+        createdAt: new Date().toISOString(),
+        ...resData,
+        id: newId,
+        guest: guestObj,
+        room: roomObj,
+        last_name: guestObj.lastName,
+        first_name: guestObj.firstName,
+        room_name: roomObj?.name,
+        room_code: roomObj?.roomCode,
+      } as Reservation;
+      setReservations((prev) => {
+        const next = [savedRes, ...prev];
+        localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
+        return next;
+      });
+      fetch('/api/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(savedRes),
+      }).catch((err) => console.warn('Backend sync POST res:', err));
     }
+
+    // Automatische Rechnungserstellung & Synchronisation
+    try {
+      const existingInv = invoices.find((inv) => inv.reservationId === savedRes.id);
+      const autoInv = generateInvoiceFromReservation(savedRes, existingInv, guests, rooms);
+      setInvoices((prev) => {
+        const idx = prev.findIndex((i) => i.reservationId === savedRes.id || i.id === autoInv.id);
+        let next;
+        if (idx !== -1) {
+          next = [...prev];
+          next[idx] = autoInv;
+        } else {
+          next = [autoInv, ...prev];
+        }
+        localStorage.setItem('lindengarten_invoices', JSON.stringify(next));
+        return next;
+      });
+      fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(autoInv),
+      }).catch((err) => console.warn('Backend sync auto-invoice POST:', err));
+    } catch (invErr) {
+      console.warn('Auto invoice generation notice:', invErr);
+    }
+
+    return savedRes;
+  };
+
+  const handleSaveInvoice = async (invoiceData: Invoice) => {
+    setInvoices((prev) => {
+      const idx = prev.findIndex((i) => i.id === invoiceData.id || (invoiceData.reservationId && i.reservationId === invoiceData.reservationId));
+      let next;
+      if (idx !== -1) {
+        next = [...prev];
+        next[idx] = invoiceData;
+      } else {
+        next = [invoiceData, ...prev];
+      }
+      localStorage.setItem('lindengarten_invoices', JSON.stringify(next));
+      return next;
+    });
+
+    fetch('/api/invoices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(invoiceData),
+    }).catch((err) => console.warn('Backend sync invoice POST:', err));
   };
 
   const handleDeleteReservation = async (id: number) => {
-    try {
-      await fetch(`/api/reservations/${id}`, { method: 'DELETE' });
-      await fetchData();
-    } catch (err) {
-      console.error('Fehler beim Löschen der Reservierung:', err);
-      alert('Fehler beim Löschen der Reservierung.');
-    }
+    setReservations((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
+      return next;
+    });
+    fetch(`/api/reservations/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.warn('Backend sync DELETE res:', err)
+    );
   };
 
   return (
@@ -248,7 +437,10 @@ export function App() {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => setIsNewResOpen(true)}
+                  onClick={() => {
+                    setEditingReservation(null);
+                    setIsNewResOpen(true);
+                  }}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-0.5 rounded text-xs shadow-xs cursor-pointer transition-colors"
                 >
                   + Neue Reservierung [F7]
@@ -289,8 +481,19 @@ export function App() {
             salutations={salutations}
             onSaveGuest={handleSaveGuest}
             onDeleteGuest={handleDeleteGuest}
-            onSelectGuest={(guest) => {
-              // Bei Doppelklick auf Gast: Schnelle Buchung starten
+            onCreateBookingForGuest={(guest) => {
+              setEditingReservation({
+                guestId: guest.id,
+                guest: guest,
+                last_name: guest.lastName,
+                first_name: guest.firstName,
+                roomId: rooms[0]?.id || 1,
+                arrivalDate: new Date().toISOString().split('T')[0],
+                departureDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                nights: 1,
+                pricePerNight: rooms[0]?.basePrice || 85,
+                totalPrice: rooms[0]?.basePrice || 85,
+              });
               setIsNewResOpen(true);
             }}
           />
@@ -305,10 +508,14 @@ export function App() {
           />
         )}
 
-        {/* TAB 4: [F4] KASSE & RECHNUNGEN (FOLIO-SPLITTING A/B/C) */}
+        {/* TAB 4: [F4] KASSE & RECHNUNGEN */}
         {activeTab === 'invoices' && (
           <InvoicesView
             invoices={invoices}
+            reservations={reservations}
+            rooms={rooms}
+            guests={guests}
+            onSaveInvoice={handleSaveInvoice}
             onRefresh={fetchData}
           />
         )}
@@ -327,15 +534,19 @@ export function App() {
       {/* GLOBALE DIALOGE */}
       {isNewResOpen && (
         <ReservationDialog
-          reservation={null}
+          reservation={editingReservation}
           rooms={rooms}
           guests={guests}
           priceVariants={priceVariants}
           isOpen={isNewResOpen}
-          onClose={() => setIsNewResOpen(false)}
+          onClose={() => {
+            setIsNewResOpen(false);
+            setEditingReservation(null);
+          }}
           onSave={async (data) => {
             await handleSaveReservation(data);
             setIsNewResOpen(false);
+            setEditingReservation(null);
           }}
         />
       )}

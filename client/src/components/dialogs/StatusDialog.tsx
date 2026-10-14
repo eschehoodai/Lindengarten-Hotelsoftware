@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import type { Reservation, Room } from '../../types';
 import { 
-  Key, CheckCircle2, Clock, AlertCircle, Lock, Unlock, 
-  FileText, DoorClosed, X, ShieldCheck, Check
+  CheckCircle2, Clock, Lock, Unlock, 
+  DoorClosed, X, Check
 } from 'lucide-react';
 
 interface StatusDialogProps {
@@ -24,31 +24,7 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
   const [isDeparted, setIsDeparted] = useState<boolean>(reservation.isDeparted);
   const [isWrittenReservation, setIsWrittenReservation] = useState<boolean>(reservation.isWrittenReservation);
   const [isLockedToRoom, setIsLockedToRoom] = useState<boolean>(reservation.isLockedToRoom);
-  const [keycardStatus, setKeycardStatus] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      } else if (e.key === 'F9') {
-        e.preventDefault();
-        handleWriteKeycard();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, onClose]);
-
-  if (!isOpen) return null;
-
-  const handleWriteKeycard = () => {
-    // Simulator für Türschloss-System / RFID Schlüsselkarten-Schnittstelle (Bild 03 Hotkey F9)
-    const cardId = `RFID-${Math.floor(100000 + Math.random() * 900000)}`;
-    setKeycardStatus(`Schlüsselkarte kodiert! Zimmer: ${reservation.room_code || room?.roomCode} | Karte: ${cardId} | Gültig bis: ${reservation.departureDate} 11:00 Uhr`);
-  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -65,6 +41,23 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'Enter' || e.key === 'F9') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose, isArrived, isDeparted, isWrittenReservation, isLockedToRoom]);
+
+  if (!isOpen) return null;
+
   return (
     <div 
       onClick={(e) => {
@@ -79,7 +72,7 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
           <div className="flex items-center gap-2">
             <DoorClosed className="w-4 h-4 text-emerald-400" />
             <span className="text-xs font-bold tracking-wide">
-              Zimmerbelegungsstatus & Schnittstellen [Res-Nr: {reservation.reservationNumber}]
+              Zimmerbelegungsstatus [Res-Nr: {reservation.reservationNumber}]
             </span>
           </div>
           <button 
@@ -229,41 +222,6 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
             </div>
           </div>
 
-          {/* SCHNITTSTELLEN: SCHLÜSSELKARTE SCHREIBEN (Bild 03 Hotkey F9) */}
-          <div className="bg-white p-3 rounded border border-slate-200 shadow-xs flex flex-col gap-2">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-1">
-              <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px] flex items-center gap-1.5">
-                <Key className="w-3.5 h-3.5 text-amber-600" />
-                <span>Türschloss-Schnittstelle (Keycard Encoder)</span>
-              </span>
-              <span className="text-[10px] font-mono text-slate-400">
-                Hotkey: [F9] Schlüssel schreiben
-              </span>
-            </div>
-
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <div className="text-[11px] text-slate-600 flex-1">
-                Kodiert die Transponder- / RFID-Schlüsselkarte für <strong>Zimmer {reservation.room_code || room?.roomCode}</strong> für den Aufenthaltszeitraum.
-              </div>
-              <button
-                type="button"
-                onClick={handleWriteKeycard}
-                className="flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-slate-900 border border-amber-600 font-bold px-3 py-1.5 rounded shadow-xs active:translate-y-px cursor-pointer transition-all"
-                title="Schlüsselkarte kodieren (F9)"
-              >
-                <Key className="w-3.5 h-3.5" />
-                <span>[F9] Schlüssel schreiben</span>
-              </button>
-            </div>
-
-            {keycardStatus && (
-              <div className="mt-1 bg-emerald-50 border border-emerald-300 text-emerald-800 p-2 rounded text-[11px] font-mono flex items-center gap-1.5 animate-in fade-in">
-                <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>{keycardStatus}</span>
-              </div>
-            )}
-          </div>
-
         </div>
 
         {/* DIALOG-FUSSZEILE */}
@@ -283,7 +241,7 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
             className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white border border-blue-700 px-4 py-1 rounded font-semibold text-xs shadow-xs cursor-pointer active:translate-y-px"
           >
             <Check className="w-3.5 h-3.5" />
-            <span>{isSaving ? 'Wird gespeichert...' : 'Status speichern [Enter]'}</span>
+            <span>{isSaving ? 'Wird gespeichert...' : 'Status speichern [F9/Enter]'}</span>
           </button>
         </div>
 

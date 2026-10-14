@@ -9,8 +9,9 @@ import {
 interface GuestsViewProps {
   guests: Guest[];
   salutations: Salutation[];
-  onSaveGuest: (guest: Partial<Guest>) => Promise<void>;
+  onSaveGuest: (guest: Partial<Guest>) => Promise<Guest | void>;
   onDeleteGuest: (id: number) => Promise<void>;
+  onCreateBookingForGuest?: (guest: Guest) => void;
   onSelectGuest?: (guest: Guest) => void;
 }
 
@@ -19,6 +20,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
   salutations,
   onSaveGuest,
   onDeleteGuest,
+  onCreateBookingForGuest,
   onSelectGuest,
 }) => {
   const [selectedId, setSelectedId] = useState<number | null>(guests[0]?.id || null);
@@ -28,6 +30,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
   const [isNew, setIsNew] = useState<boolean>(false);
   const [formData, setFormData] = useState<Partial<Guest>>({});
   const tableContainerRef = useRef<HTMLDivElement>(null);
+  const lastNameInputRef = useRef<HTMLInputElement>(null);
 
   // Sync selected guest
   useEffect(() => {
@@ -46,6 +49,16 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       setIsEditing(false);
     }
   }, [selectedGuest, isNew]);
+
+  // Fokus auf Nachname beim Start des Bearbeitens / Neuanlegens
+  useEffect(() => {
+    if (isEditing) {
+      const timer = setTimeout(() => {
+        lastNameInputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isEditing]);
 
   // Filtered guests
   const filteredGuests = useMemo(() => {
@@ -67,33 +80,6 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       return matchSearchName || matchLast || matchFirst || matchFirm || matchCity || matchNum || matchPhone;
     });
   }, [guests, searchQuery, filterMode]);
-
-  // Keyboard navigation through table
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEditing) return; // Do not intercept while typing in inputs
-
-      const currentIndex = filteredGuests.findIndex((g) => g.id === selectedId);
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (currentIndex < filteredGuests.length - 1) {
-          setSelectedId(filteredGuests[currentIndex + 1].id);
-        }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (currentIndex > 0) {
-          setSelectedId(filteredGuests[currentIndex - 1].id);
-        }
-      } else if (e.key === 'Enter') {
-        if (selectedGuest && onSelectGuest) {
-          onSelectGuest(selectedGuest);
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredGuests, selectedId, isEditing, selectedGuest, onSelectGuest]);
 
   // Actions
   const handleStartNew = () => {
@@ -155,9 +141,12 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       searchName: formData.searchName || `${formData.lastName}, ${formData.firstName}`,
     };
 
-    await onSaveGuest(payload);
+    const saved = await onSaveGuest(payload);
     setIsEditing(false);
     setIsNew(false);
+    if (saved && (saved as Guest).id) {
+      setSelectedId((saved as Guest).id);
+    }
   };
 
   const handleDelete = async () => {
@@ -177,6 +166,63 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       setFormData({ ...selectedGuest });
     }
   };
+
+  // Keyboard navigation through table (wenn nicht in Eingabefeldern getippt wird)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+
+      // Tastaturkürzel während der Bearbeitung
+      if (isEditing) {
+        if (e.key === 'F9') {
+          e.preventDefault();
+          handleSave();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          handleCancel();
+        }
+        return;
+      }
+
+      if (isInput) return;
+
+      const currentIndex = filteredGuests.findIndex((g) => g.id === selectedId);
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (currentIndex < filteredGuests.length - 1) {
+          setSelectedId(filteredGuests[currentIndex + 1].id);
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (currentIndex > 0) {
+          setSelectedId(filteredGuests[currentIndex - 1].id);
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        setIsEditing(true);
+      } else if (e.key === 'F6') {
+        if (selectedGuest && onCreateBookingForGuest) {
+          e.preventDefault();
+          onCreateBookingForGuest(selectedGuest);
+        }
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        handleStartNew();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        handleStartCopy();
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        setIsEditing(true);
+      } else if (e.key === 'Delete') {
+        e.preventDefault();
+        handleDelete();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredGuests, selectedId, isEditing, selectedGuest, onCreateBookingForGuest, formData]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-200 select-none">
@@ -235,7 +281,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               }`}
             >
               <ShieldAlert className="w-3 h-3 text-emerald-500" />
-              <span>City-Tax Befreit</span>
+              <span>Gästetaxe Befreit</span>
             </button>
           </div>
         </div>
@@ -261,7 +307,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               <th className="py-1.5 px-3 border-r border-slate-300 w-44">PLZ, Ort</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-32">Telefon</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-24 text-center">Stammgast</th>
-              <th className="py-1.5 px-3 w-28 text-center">City-Tax</th>
+              <th className="py-1.5 px-3 w-32 text-center">Gästetaxe</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
@@ -283,7 +329,12 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
                         setIsNew(false);
                       }
                     }}
-                    onDoubleClick={() => onSelectGuest && onSelectGuest(guest)}
+                    onDoubleClick={() => {
+                      if (!isEditing) {
+                        setSelectedId(guest.id);
+                        setIsEditing(true);
+                      }
+                    }}
                     className={`cursor-pointer transition-colors ${
                       isSelected
                         ? 'bg-blue-600 text-white font-semibold'
@@ -322,7 +373,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
                           Befreit
                         </span>
                       ) : (
-                        <span className="text-slate-400 text-[10px]">Normal (5%)</span>
+                        <span className="text-slate-400 text-[10px]">Normal (2,90 €)</span>
                       )}
                     </td>
                   </tr>
@@ -425,7 +476,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               </span>
             </label>
 
-            {/* City-Tax Befreit Checkbox */}
+            {/* Gästetaxe Befreit Checkbox */}
             <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
               <input
                 type="checkbox"
@@ -436,7 +487,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               />
               <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
                 <ShieldAlert className="w-3.5 h-3.5 text-emerald-600" />
-                <span>City-Tax Befreit</span>
+                <span>Gästetaxe Befreit</span>
               </span>
             </label>
           </div>
@@ -445,6 +496,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
           <div className="col-span-2 flex flex-col gap-0.5">
             <label className="text-[10px] text-slate-500 uppercase font-semibold">Nachname *</label>
             <input
+              ref={lastNameInputRef}
               type="text"
               disabled={!isEditing}
               value={formData.lastName || ''}
@@ -594,7 +646,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
           </div>
 
           <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">City-Tax Befreiungsgrund</label>
+            <label className="text-[10px] text-slate-500 uppercase font-semibold">Gästetaxe Befreiungsgrund</label>
             <select
               disabled={!isEditing || !formData.isTaxExempt}
               value={formData.taxExemptReason || ''}
@@ -602,10 +654,13 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs disabled:bg-slate-100"
             >
               <option value="">Keiner</option>
-              <option value="beruflich">Beruflich veranlasst</option>
-              <option value="minderjaehrig">Minderjährig (&lt; 18 Jahre)</option>
-              <option value="schwerbehindert">Schwerbehindert (GdB ≥ 80)</option>
-              <option value="medizinisch">Medizinisch zwingend</option>
+              <option value="GdB >= 80 mit Merkzeichen B">Schwerbehindert (GdB ≥ 80 mit Vermerk B)</option>
+              <option value="Begleitperson (Merkzeichen B)">Begleitperson Ausweis Vermerk B</option>
+              <option value="Ausbildung ohne Zweitwohnung">Ausbildung ohne Zweitwohnung</option>
+              <option value="Bettlägerig mit ärztlichem Attest">Bettlägerig mit ärztlichem Attest</option>
+              <option value="Kinder unter 6 Jahren">Kind unter 6 Jahren (frei)</option>
+              <option value="Schul-/Freizeitfahrt (Gruppe bis 15 J.)">Kinder-/Jugendgruppe Schul-/Freizeitfahrt</option>
+              <option value="Jahresgästetaxe Familie">Familienangehöriger Jahresgästetaxe</option>
             </select>
           </div>
         </div>
@@ -615,12 +670,16 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       <ActionBar
         isEditing={isEditing}
         onSelect={() => {
-          if (selectedGuest && onSelectGuest) {
-            onSelectGuest(selectedGuest);
+          if (selectedGuest) {
+            if (onCreateBookingForGuest) {
+              onCreateBookingForGuest(selectedGuest);
+            } else if (onSelectGuest) {
+              onSelectGuest(selectedGuest);
+            }
           }
         }}
-        selectLabel={onSelectGuest ? '[F6] Gast auswählen' : '[F6] Übernehmen'}
-        canSelect={!!selectedGuest}
+        selectLabel={onCreateBookingForGuest ? '[F6] Neue Buchung mit diesem Gast' : onSelectGuest ? '[F6] Gast auswählen' : '[F6] Übernehmen'}
+        canSelect={!isEditing && !!selectedGuest}
         onNew={handleStartNew}
         onCopy={handleStartCopy}
         onEdit={() => {

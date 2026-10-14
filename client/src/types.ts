@@ -63,11 +63,15 @@ export interface Reservation {
   pricePerNight: number;
   totalPrice: number;
   isFlatRate: boolean;
+  boardType?: 'Frühstück' | 'OHP' | '2Gang' | '3Gang' | string;
   hasBreakfast: boolean;
   breakfastCount: number;
-  lunchCount: number;
-  coffeeTeaCount: number;
-  dinnerCount: number;
+  ohpCount?: number;
+  twoGangCount?: number;
+  threeGangCount?: number;
+  lunchCount?: number;
+  coffeeTeaCount?: number;
+  dinnerCount?: number;
   dailyArrangement?: string;
   billingDebitor?: string;
   notes?: string;
@@ -98,4 +102,53 @@ export interface PriceVariant {
   isFlatRate: boolean;
 }
 
+export interface Invoice {
+  id: number;
+  invoiceNumber: string;
+  reservationId?: number;
+  guestId: number;
+  invoiceDate: string;
+  servicePeriodStart: string;
+  servicePeriodEnd: string;
+  nights: number;
+  
+  // Anschrift & Personalisierung
+  recipientSalutation?: string;
+  recipientName?: string;
+  recipientCompany?: string;
+  recipientStreet?: string;
+  recipientZip?: string;
+  recipientCity?: string;
+  recipientCountry?: string;
+  
+  // Buchungsbezug
+  roomCode?: string;
+  roomName?: string;
+  billingDebitor?: string;
+  
+  // Positionen & Beträge
+  items?: any[];
+  netLodging: number;
+  taxLodging: number;
+  netService: number;
+  taxService: number;
+  cityTaxAmount: number;
+  totalGross: number;
+  
+  // Texte & Konditionen
+  closingText?: string;
+  paymentMethod: string;
+  isPaid: boolean;
+  status: string;
+  
+  // TSE & Fiskalisierung
+  tseTransactionId?: string;
+  tseSignature?: string;
+  
+  // Joins
+  guest?: Guest;
+  reservation?: Reservation;
+}
+
 export const APP_VERSION = '2.0';
+

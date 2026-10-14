@@ -77,12 +77,16 @@ export const reservations = sqliteTable('reservations', {
   isFlatRate: integer('is_flat_rate', { mode: 'boolean' }).default(false),
   
   // Verpflegungsmatrix (F&B)
+  boardType: text('board_type').default('Frühstück'), // 'Frühstück' | 'OHP' | '2Gang' | '3Gang'
   hasBreakfast: integer('has_breakfast', { mode: 'boolean' }).default(true),
   breakfastCount: integer('breakfast_count').default(1),
+  ohpCount: integer('ohp_count').default(0),
+  twoGangCount: integer('two_gang_count').default(0),
+  threeGangCount: integer('three_gang_count').default(0),
   lunchCount: integer('lunch_count').default(0),
   coffeeTeaCount: integer('coffee_tea_count').default(0),
   dinnerCount: integer('dinner_count').default(0),
-  dailyArrangement: text('daily_arrangement'),     // z. B. "Angebot F/ 2 Gang"
+  dailyArrangement: text('daily_arrangement'),     // z. B. "Frühstück", "OHP", "2Gang", "3Gang"
   
   billingDebitor: text('billing_debitor'),
   notes: text('notes'),

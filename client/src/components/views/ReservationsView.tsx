@@ -13,7 +13,7 @@ interface ReservationsViewProps {
   rooms: Room[];
   guests: Guest[];
   priceVariants: PriceVariant[];
-  onSaveReservation: (data: Partial<Reservation>) => Promise<void>;
+  onSaveReservation: (data: Partial<Reservation>) => Promise<any>;
   onDeleteReservation: (id: number) => Promise<void>;
   onRefresh: () => void;
 }
@@ -293,7 +293,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
                     </td>
                     <td className="py-1 px-3 border-r border-slate-200/50 font-sans text-[10px]">{res.priceVariant}</td>
                     <td className="py-1 px-3 border-r border-slate-200/50 text-right font-bold">
-                      {res.totalPrice.toFixed(2)} €
+                      {(Number(res.totalPrice) || 0).toFixed(2)} €
                     </td>
                     <td className="py-1 px-3 border-r border-slate-200/50 text-center font-sans">
                       {isArrived && (
@@ -350,7 +350,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
               <Calendar className="w-4 h-4 text-blue-600" />
               <span>Buchungsdetail & Verpflegung (ELAN hogatec):</span>
               <strong className="text-blue-700">
-                {selectedRes ? `Res-Nr. ${selectedRes.reservationNumber} [${selectedRes.room_code || selectedRoom?.roomCode} ${selectedRes.room_name || selectedRoom?.name}]` : 'Keine Buchung'}
+                {selectedRes ? `Res-Nr. ${selectedRes.reservationNumber || '—'} [${selectedRes.room_code || selectedRoom?.roomCode || ''} ${selectedRes.room_name || selectedRoom?.name || ''}]` : 'Keine Buchung'}
               </strong>
             </span>
           </div>
@@ -418,36 +418,53 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
               </div>
             </div>
 
-            {/* SPALTE 3: VERPFLEGUNGSMATRIX & ARRANGEMENT */}
-            <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
-              <div>
-                <span className="text-[10px] text-slate-500 uppercase font-semibold flex items-center gap-1">
-                  <Coffee className="w-3 h-3 text-amber-600" />
-                  <span>Verpflegung (Tagesangebot)</span>
-                </span>
-                <div className="grid grid-cols-4 gap-1 text-center font-mono mt-1 text-[11px]">
-                  <div className="bg-amber-100/70 p-1 rounded border border-amber-300">
-                    <div className="text-[9px] text-amber-900 font-bold">Fr</div>
-                    <div className="font-bold">{selectedRes.breakfastCount}</div>
+            {/* SPALTE 3: VERPFLEGUNGSMATRIX */}
+            {(() => {
+              const getBoard = (res: typeof selectedRes): 'Frühstück' | 'OHP' | '2Gang' | '3Gang' => {
+                if (res.boardType === 'OHP' || res.dailyArrangement?.toUpperCase().includes('OHP')) return 'OHP';
+                if (res.boardType === '3Gang' || res.dailyArrangement?.includes('3 Gang') || res.dailyArrangement?.includes('3Gang') || (res.threeGangCount && res.threeGangCount > 0)) return '3Gang';
+                if (res.boardType === '2Gang' || res.dailyArrangement?.includes('2 Gang') || res.dailyArrangement?.includes('2Gang') || (res.twoGangCount && res.twoGangCount > 0)) return '2Gang';
+                return 'Frühstück';
+              };
+              const resBoard = getBoard(selectedRes);
+              return (
+                <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
+                  <div>
+                    <span className="text-[10px] text-slate-500 uppercase font-semibold flex items-center justify-between">
+                      <div className="flex items-center gap-1">
+                        <Coffee className="w-3 h-3 text-amber-600" />
+                        <span>Verpflegungsmatrix</span>
+                      </div>
+                      <span className="font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.2 rounded text-[10px]">
+                        {resBoard}
+                      </span>
+                    </span>
+                    <div className="grid grid-cols-4 gap-1 text-center font-mono mt-1 text-[11px]">
+                      <div className={`p-1 rounded border transition-colors ${resBoard === 'Frühstück' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                        <div className="text-[9px] font-bold">Frühstück</div>
+                        <div>{selectedRes.breakfastCount || (resBoard === 'Frühstück' ? selectedRes.adultsCount : 0)}</div>
+                      </div>
+                      <div className={`p-1 rounded border transition-colors ${resBoard === 'OHP' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                        <div className="text-[9px] font-bold">OHP</div>
+                        <div>{selectedRes.ohpCount || (resBoard === 'OHP' ? selectedRes.adultsCount : 0)}</div>
+                      </div>
+                      <div className={`p-1 rounded border transition-colors ${resBoard === '2Gang' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                        <div className="text-[9px] font-bold">2Gang</div>
+                        <div>{selectedRes.twoGangCount || (resBoard === '2Gang' ? (selectedRes.dinnerCount || selectedRes.adultsCount) : 0)}</div>
+                      </div>
+                      <div className={`p-1 rounded border transition-colors ${resBoard === '3Gang' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
+                        <div className="text-[9px] font-bold">3Gang</div>
+                        <div>{selectedRes.threeGangCount || (resBoard === '3Gang' ? (selectedRes.dinnerCount || selectedRes.adultsCount) : 0)}</div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-slate-100 p-1 rounded border border-slate-300">
-                    <div className="text-[9px] text-slate-600 font-bold">Mt</div>
-                    <div>{selectedRes.lunchCount}</div>
-                  </div>
-                  <div className="bg-slate-100 p-1 rounded border border-slate-300">
-                    <div className="text-[9px] text-slate-600 font-bold">KT</div>
-                    <div>{selectedRes.coffeeTeaCount}</div>
-                  </div>
-                  <div className="bg-slate-100 p-1 rounded border border-slate-300">
-                    <div className="text-[9px] text-slate-600 font-bold">Ab</div>
-                    <div>{selectedRes.dinnerCount}</div>
+                  <div className="text-[10px] text-slate-700 border-t border-slate-200 pt-1 flex items-center justify-between">
+                    <span className="text-slate-500">Auswahl:</span>
+                    <span className="font-semibold text-slate-800">{selectedRes.boardType || selectedRes.dailyArrangement || resBoard}</span>
                   </div>
                 </div>
-              </div>
-              <div className="text-[10px] text-slate-700 italic border-t border-slate-200 pt-1">
-                {selectedRes.dailyArrangement || 'Kein Sonderarrangement'}
-              </div>
-            </div>
+              );
+            })()}
 
             {/* SPALTE 4: FINANZEN & PREISE */}
             <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
@@ -457,10 +474,10 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
                   Variante: {selectedRes.priceVariant}
                 </div>
                 <div className="text-[11px] font-mono text-slate-600">
-                  Einzelpreis: {selectedRes.pricePerNight.toFixed(2)} € / Nacht
+                  Einzelpreis: {(Number(selectedRes.pricePerNight) || 0).toFixed(2)} € / Nacht
                 </div>
                 <div className="text-sm font-mono font-bold text-emerald-700 mt-1">
-                  Gesamt: {selectedRes.totalPrice.toFixed(2)} €
+                  Gesamt: {(Number(selectedRes.totalPrice) || 0).toFixed(2)} €
                 </div>
               </div>
               {selectedRes.notes && (

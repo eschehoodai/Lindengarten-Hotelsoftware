@@ -100,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
               ? 'bg-blue-600 text-white shadow-xs font-semibold'
               : 'text-slate-300 hover:bg-slate-700 hover:text-white'
           }`}
-          title="Kasse, Folio-Split & Rechnungen (F4)"
+          title="Kasse, Buchungsrechnungen & PDF (F4)"
         >
           <FileText className="w-3.5 h-3.5" />
           <span>[F4] Kasse & Rechnungen</span>

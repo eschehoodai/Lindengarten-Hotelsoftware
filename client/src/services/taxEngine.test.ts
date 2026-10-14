@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   roundToCent,
   calculateSplitTax,
+  calculateJonsdorfGaestetaxe,
   calculateLeipzigCityTax,
   calculateInvoiceSummary,
   generateDefaultFolioItems,
@@ -91,7 +92,7 @@ describe('1. Kaufmännische Rundung & USt-Splitting (§ 12 UStG)', () => {
   });
 });
 
-describe('2. Leipziger Beherbergungssteuer (City Tax Leipzig)', () => {
+describe('2. Leipziger Beherbergungssteuer (City Tax Leipzig - Legacy)', () => {
   it('berechnet 5% City Tax auf Standardübernachtung 85,00 €', () => {
     const res = calculateLeipzigCityTax(85.00);
     // 85 * 0.05 = 4.25 €
@@ -149,6 +150,101 @@ describe('2. Leipziger Beherbergungssteuer (City Tax Leipzig)', () => {
     const res = calculateLeipzigCityTax(0.00);
     expect(res.cityTaxAmount).toBe(0.00);
     expect(res.isExempt).toBe(false);
+  });
+});
+
+describe('2b. Gästetaxesatzung Kurort Jonsdorf (Fassung vom 05.05.2025)', () => {
+  it('berechnet Standardtarif Erwachsene (ab 15 Jahre): 2,90 € pro Person und Übernachtung', () => {
+    // 1 Erwachsener, 1 Nacht
+    const res1 = calculateJonsdorfGaestetaxe(1, 1, 0);
+    expect(res1.gaestetaxeAmount).toBe(2.90);
+    expect(res1.cityTaxAmount).toBe(2.90);
+    expect(res1.isExempt).toBe(false);
+
+    // 2 Erwachsene, 5 Nächte: 2 * 2.90 * 5 = 29.00 €
+    const res2 = calculateJonsdorfGaestetaxe(5, 2, 0);
+    expect(res2.gaestetaxeAmount).toBe(29.00);
+  });
+
+  it('berechnet 50 % Ermäßigung für Kinder & Jugendliche 6-14 Jahre: 1,45 € (§ 5 Satzung)', () => {
+    // 1 Kind (6-14 Jahre), 1 Nacht
+    const res = calculateJonsdorfGaestetaxe(1, 0, 1);
+    expect(res.gaestetaxeAmount).toBe(1.45);
+
+    // 2 Kinder, 4 Nächte: 2 * 1.45 * 4 = 11.60 €
+    const res2 = calculateJonsdorfGaestetaxe(4, 0, 2);
+    expect(res2.gaestetaxeAmount).toBe(11.60);
+  });
+
+  it('befreit Kinder bis zum vollendeten 6. Lebensjahr vollständig (0,00 € gem. § 3 Abs. 1 a)', () => {
+    const res = calculateJonsdorfGaestetaxe({
+      nights: 7,
+      adultsCount: 0,
+      childrenCount: 0,
+      smallChildrenCount: 2, // 2 Kleinkinder < 6 Jahre
+    });
+    expect(res.gaestetaxeAmount).toBe(0.00);
+  });
+
+  it('berechnet Buchung Familie Junghans aus Bild 01/02 (5 Nächte, 2 Erw., 1 Kind 11 Jahre)', () => {
+    // 5 Nächte: 2 Erw. à 2.90 € (29.00 €) + 1 Kind à 1.45 € (7.25 €) = 36.25 €
+    const res = calculateJonsdorfGaestetaxe({
+      nights: 5,
+      adultsCount: 2,
+      childrenCount: 1,
+    });
+    expect(res.gaestetaxeAmount).toBe(36.25);
+    expect(res.breakdown).toContain('36.25 €');
+  });
+
+  it('befreit Schwerbehinderte mit GdB >= 80 und Vermerk "B" (§ 3 Abs. 1 e)', () => {
+    const res = calculateJonsdorfGaestetaxe({
+      nights: 3,
+      adultsCount: 1,
+      isExempt: true,
+      exemptReason: 'GdB >= 80 mit Merkzeichen B',
+    });
+    expect(res.gaestetaxeAmount).toBe(0.00);
+    expect(res.isExempt).toBe(true);
+  });
+
+  it('befreit Begleitpersonen von Schwerbehinderten mit Vermerk "B" (§ 3 Abs. 1 f)', () => {
+    const res = calculateJonsdorfGaestetaxe({
+      nights: 3,
+      adultsCount: 1,
+      isExempt: true,
+      exemptReason: 'Begleitperson (Merkzeichen B)',
+    });
+    expect(res.gaestetaxeAmount).toBe(0.00);
+    expect(res.isExempt).toBe(true);
+  });
+
+  it('befreit Personen in Ausbildung ohne Zweitwohnung (§ 3 Abs. 1 b)', () => {
+    const res = calculateJonsdorfGaestetaxe({
+      nights: 4,
+      adultsCount: 1,
+      isExempt: true,
+      exemptReason: 'Ausbildung ohne Zweitwohnung',
+    });
+    expect(res.gaestetaxeAmount).toBe(0.00);
+    expect(res.isExempt).toBe(true);
+  });
+
+  it('RECHTSKONFORMITÄT § 2 Abs. 5: Berufliche/geschäftliche Übernachtungen sind in Jonsdorf STEUERPFLICHTIG!', () => {
+    // In Leipzig waren Dienstreisen befreit, in Jonsdorf gilt § 2 Abs. 5 (Ausdrückliche Gästetaxepflicht!)
+    const res = calculateJonsdorfGaestetaxe({
+      nights: 2,
+      adultsCount: 1,
+      isExempt: false,
+      exemptReason: 'beruflich', // darf nicht befreien!
+    });
+    expect(res.gaestetaxeAmount).toBe(5.80); // 2 * 2.90 €
+    expect(res.isExempt).toBe(false);
+  });
+
+  it('behandelt 0 Nächte oder leere Personenanzahl sauber', () => {
+    const res = calculateJonsdorfGaestetaxe(0, 0, 0);
+    expect(res.gaestetaxeAmount).toBe(0.00);
   });
 });
 
@@ -228,13 +324,15 @@ describe('3. Dreifach-Folio-Splitting & Rechnungs-Engine (Bild 04)', () => {
     expect(summary.totalGross).toBe(roundToCent(summary.totalNet + summary.totalTax));
   });
 
-  it('erzeugt automatisch Standard-Folio-Posten mit generateDefaultFolioItems', () => {
+  it('erzeugt automatisch Standard-Folio-Posten mit Gästetaxe Kurort Jonsdorf', () => {
     const items = generateDefaultFolioItems({
-      guestName: 'Marion Langerwisch',
-      roomCode: '4',
-      nights: 3,
-      lodgingPricePerNight: 85.00,
-      breakfastCountTotal: 3,
+      guestName: 'Familie Junghans',
+      roomCode: 'Herman',
+      nights: 5,
+      lodgingPricePerNight: 166.00,
+      adultsCount: 2,
+      childrenCount: 1, // 11 Jahre
+      breakfastCountTotal: 15,
       breakfastPricePerPerson: 12.50,
       isCityTaxExempt: false,
     });
@@ -245,36 +343,52 @@ describe('3. Dreifach-Folio-Splitting & Rechnungs-Engine (Bild 04)', () => {
     expect(items[0].folioBucket).toBe('A');
     expect(items[0].taxType).toBe('LODGING');
     expect(items[0].taxRate).toBe(0.07);
-    expect(items[0].totalGross).toBe(255.00); // 3 * 85
+    expect(items[0].totalGross).toBe(830.00); // 5 * 166
 
     // Posten 2: Folio B Frühstück
     expect(items[1].folioBucket).toBe('B');
     expect(items[1].taxType).toBe('SERVICE');
     expect(items[1].taxRate).toBe(0.19);
-    expect(items[1].totalGross).toBe(37.50); // 3 * 12.50
+    expect(items[1].totalGross).toBe(187.50); // 15 * 12.50
 
-    // Posten 3: Folio B City Tax
+    // Posten 3: Folio B Gästetaxe Jonsdorf
     expect(items[2].folioBucket).toBe('B');
     expect(items[2].taxType).toBe('CITY_TAX');
     expect(items[2].taxRate).toBe(0.00);
-    // 255.00 * 0.05 = 12.75 €
-    expect(items[2].totalGross).toBe(12.75);
+    // 5 Nächte * (2 * 2.90 € + 1 * 1.45 €) = 36.25 €
+    expect(items[2].totalGross).toBe(36.25);
+    expect(items[2].description).toContain('Gästetaxe Kurort Jonsdorf');
   });
 
-  it('erzeugt bei City-Tax Befreiung keinen City Tax Posten', () => {
+  it('erzeugt bei Gästetaxe-Befreiung (z.B. Merkzeichen B) keinen Gästetaxe Posten', () => {
     const items = generateDefaultFolioItems({
       guestName: 'Dr. Michael Wagner',
       roomCode: 'Prinze',
       nights: 2,
       lodgingPricePerNight: 95.00,
       isCityTaxExempt: true,
-      cityTaxExemptReason: 'beruflich',
+      cityTaxExemptReason: 'GdB >= 80 mit Merkzeichen B',
     });
 
     expect(items).toHaveLength(1);
     expect(items[0].folioBucket).toBe('A');
     expect(items[0].taxType).toBe('LODGING');
     expect(items[0].totalGross).toBe(190.00);
+  });
+
+  it('unterstützt Legacy Leipzig City Tax bei explizitem Flag', () => {
+    const items = generateDefaultFolioItems({
+      guestName: 'Marion Langerwisch',
+      roomCode: '4',
+      nights: 3,
+      lodgingPricePerNight: 85.00,
+      useLegacyLeipzigCityTax: true,
+    });
+
+    expect(items).toHaveLength(2);
+    // Posten 2: Folio B City Tax (255 * 0.05 = 12.75 €)
+    expect(items[1].totalGross).toBe(12.75);
+    expect(items[1].description).toContain('Leipzig');
   });
 });
 

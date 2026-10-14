@@ -35,7 +35,7 @@ Das System ist für den **parallelen Mehrplatz-Betrieb (Multi-Client LAN)** an 2
 - **[F5] Stammdaten:** Kataloge für Preisvarianten und Anreden.
 - **Dialoge:**
   - `ReservationDialog`: Buchungsmaske mit Zimmerauswahl, Reisedaten, Preisfindung und F&B Verpflegungsmatrix (*Fr, Mt, KT, Ab*).
-  - `StatusDialog`: Check-In/Check-Out Schalter, Buchungsschutz (`isLockedToRoom`) und RFID-Türschloss-Schnittstelle (`[F9] Schlüssel schreiben`).
+  - `StatusDialog`: Check-In/Check-Out Schalter und Buchungsschutz (`isLockedToRoom`).
 
 ### ✅ Phase 3: Steuer- & Abrechnungslogik (inkl. Leipziger City Tax)
 - **§ 12 UStG Aufteilung:** Logis (7% USt) vs. F&B/Services (19% USt) vs. Befreit (0% USt).

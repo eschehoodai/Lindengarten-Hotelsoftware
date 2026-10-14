@@ -1,5 +1,8 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { db, client, schema } from './db/index.js';
 import { eq, desc } from 'drizzle-orm';
 import {
@@ -10,6 +13,9 @@ import {
   FALLBACK_SALUTATIONS,
   FALLBACK_INVOICES
 } from './fallbackData.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3001;
@@ -316,26 +322,71 @@ app.put('/api/invoice-items/:id/folio', async (req, res) => {
 });
 
 app.post('/api/invoices', async (req, res) => {
+  const invData = req.body;
   try {
     if (db) {
-      const newInvoice = await db.insert(schema.invoices).values({
-        ...req.body,
-        createdAt: new Date().toISOString()
-      }).returning();
-      if (newInvoice && newInvoice[0]) {
-        return res.status(201).json(newInvoice[0]);
+      const existing = await db.select().from(schema.invoices).where(eq(schema.invoices.invoiceNumber, invData.invoiceNumber));
+      if (existing && existing.length > 0) {
+        const updated = await db.update(schema.invoices)
+          .set(invData)
+          .where(eq(schema.invoices.invoiceNumber, invData.invoiceNumber))
+          .returning();
+        if (updated && updated[0]) return res.json(updated[0]);
+      } else {
+        const newInvoice = await db.insert(schema.invoices).values({
+          ...invData,
+          createdAt: new Date().toISOString()
+        }).returning();
+        if (newInvoice && newInvoice[0]) {
+          return res.status(201).json(newInvoice[0]);
+        }
       }
     }
   } catch (err: any) {
-    console.warn('DB insert failed for invoice:', err.message);
+    console.warn('DB insert/update failed for invoice:', err.message);
   }
-  const fallbackInv = {
-    ...req.body,
-    id: memoryInvoices.length + 1,
-    createdAt: new Date().toISOString()
-  };
-  memoryInvoices.unshift(fallbackInv);
-  res.status(201).json(fallbackInv);
+
+  // Memory fallback
+  const idx = memoryInvoices.findIndex((x: any) => 
+    (invData.id && x.id === invData.id) || 
+    (invData.reservationId && x.reservationId === invData.reservationId) ||
+    (invData.invoiceNumber && x.invoiceNumber === invData.invoiceNumber)
+  );
+
+  if (idx !== -1) {
+    memoryInvoices[idx] = { ...memoryInvoices[idx], ...invData };
+    return res.json(memoryInvoices[idx]);
+  } else {
+    const fallbackInv = {
+      ...invData,
+      id: invData.id || (memoryInvoices.length + 1),
+      createdAt: new Date().toISOString()
+    };
+    memoryInvoices.unshift(fallbackInv);
+    return res.status(201).json(fallbackInv);
+  }
+});
+
+app.put('/api/invoices/:id', async (req, res) => {
+  const { id } = req.params;
+  const invData = req.body;
+  try {
+    if (db) {
+      const updated = await db.update(schema.invoices)
+        .set(invData)
+        .where(eq(schema.invoices.id, Number(id)))
+        .returning();
+      if (updated && updated[0]) return res.json(updated[0]);
+    }
+  } catch (err: any) {
+    console.warn('DB update failed for invoice:', err.message);
+  }
+  const idx = memoryInvoices.findIndex((x: any) => x.id === Number(id));
+  if (idx !== -1) {
+    memoryInvoices[idx] = { ...memoryInvoices[idx], ...invData };
+    return res.json(memoryInvoices[idx]);
+  }
+  res.json({ success: true, ...invData });
 });
 
 // 5. Stammdaten (Preisvarianten & Anreden)
@@ -377,6 +428,18 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// Statische Dateien des Frontends (client/dist) ausliefern
+const clientDistPath = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDistPath, 'index.html'));
+  });
+}
 
 // Only listen locally, Vercel Serverless invokes exported handler directly
 if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {

@@ -162,28 +162,39 @@ async function seedData() {
   
   // 1. Zimmer des Hotels Lindengarten einpflegen
   const roomData = [
-    { roomCode: '1', name: 'Zimmer 1', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Haupthaus', sortOrder: 1, housekeepingStatus: 'clean' },
-    { roomCode: '2', name: 'Zimmer 2', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Haupthaus', sortOrder: 2, housekeepingStatus: 'clean' },
-    { roomCode: '4', name: 'Zimmer 4', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 90.0, floor: 'Haupthaus', sortOrder: 3, housekeepingStatus: 'clean' },
-    { roomCode: '5', name: 'Zimmer 5', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 90.0, floor: 'Haupthaus', sortOrder: 4, housekeepingStatus: 'clean' },
-    { roomCode: 'Tobias', name: 'Zimmer Tobias', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 95.0, floor: 'Nebengebäude', sortOrder: 5, housekeepingStatus: 'clean' },
-    { roomCode: 'Annie', name: 'Zimmer Annie', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 95.0, floor: 'Nebengebäude', sortOrder: 6, housekeepingStatus: 'dirty' },
-    { roomCode: 'Herman', name: 'Zimmer Herman', categoryCode: 'TBZ', categoryName: 'Dreibettzimmer', baseBeds: 3, maxCapacity: 3, basePrice: 110.0, floor: 'Nebengebäude', sortOrder: 7, housekeepingStatus: 'clean' },
-    { roomCode: 'Prinze', name: 'Prinzessin von Sachsen Stube', categoryCode: 'TBZ', categoryName: 'Dreibettzimmer', baseBeds: 2, maxCapacity: 4, basePrice: 130.0, floor: 'Stuben', sortOrder: 8, housekeepingStatus: 'clean' },
-    { roomCode: 'Stall', name: 'Stall Suite', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 3, basePrice: 120.0, floor: 'Hof', sortOrder: 9, housekeepingStatus: 'clean' },
-    { roomCode: 'Scheun', name: 'Scheune', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 4, basePrice: 140.0, floor: 'Hof', sortOrder: 10, housekeepingStatus: 'clean' },
-    { roomCode: 'Schupp', name: 'Schuppen', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Hof', sortOrder: 11, housekeepingStatus: 'clean' },
-    { roomCode: 'Heubod', name: 'Heuboden', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 4, basePrice: 135.0, floor: 'Hof', sortOrder: 12, housekeepingStatus: 'clean', specialCleaningNote: 'Keine Wäsche' },
-    { roomCode: 'Kammer', name: 'Gesinde Kammer', categoryCode: 'EZ', categoryName: 'Einzelzimmer', baseBeds: 1, maxCapacity: 1, basePrice: 65.0, floor: 'Hof', sortOrder: 13, housekeepingStatus: 'clean' },
-    { roomCode: 'Luisa', name: 'Suite Luisa', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 3, basePrice: 125.0, floor: 'Haupthaus', sortOrder: 14, housekeepingStatus: 'clean' },
+    { roomCode: '1', name: 'Zimmer 1', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Hauptgebäude', sortOrder: 1, housekeepingStatus: 'clean' },
+    { roomCode: '2', name: 'Zimmer 2', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Hauptgebäude', sortOrder: 2, housekeepingStatus: 'clean' },
+    { roomCode: '4', name: 'Zimmer 4', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 90.0, floor: 'Hauptgebäude', sortOrder: 3, housekeepingStatus: 'clean' },
+    { roomCode: '5', name: 'Zimmer 5', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 90.0, floor: 'Hauptgebäude', sortOrder: 4, housekeepingStatus: 'clean' },
+    { roomCode: 'Tobias', name: 'Zimmer Tobias', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 95.0, floor: 'Hauptgebäude', sortOrder: 5, housekeepingStatus: 'clean' },
+    { roomCode: 'Annie', name: 'Zimmer Annie', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 95.0, floor: 'Hauptgebäude', sortOrder: 6, housekeepingStatus: 'dirty' },
+    { roomCode: 'Herman', name: 'Zimmer Herman', categoryCode: 'TBZ', categoryName: 'Dreibettzimmer', baseBeds: 3, maxCapacity: 3, basePrice: 110.0, floor: 'Hauptgebäude', sortOrder: 7, housekeepingStatus: 'clean' },
+    { roomCode: 'Prinze', name: 'Prinzessin von Sachsen Stube', categoryCode: 'TBZ', categoryName: 'Dreibettzimmer', baseBeds: 2, maxCapacity: 4, basePrice: 130.0, floor: 'Hauptgebäude', sortOrder: 8, housekeepingStatus: 'clean' },
+    { roomCode: 'Stall', name: 'Stall Suite', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 3, basePrice: 120.0, floor: 'Nebengebäude', sortOrder: 9, housekeepingStatus: 'clean' },
+    { roomCode: 'Scheun', name: 'Scheune', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 4, basePrice: 140.0, floor: 'Nebengebäude', sortOrder: 10, housekeepingStatus: 'clean' },
+    { roomCode: 'Schupp', name: 'Schuppen', categoryCode: 'DZ', categoryName: 'Doppelzimmer', baseBeds: 2, maxCapacity: 2, basePrice: 85.0, floor: 'Nebengebäude', sortOrder: 11, housekeepingStatus: 'clean' },
+    { roomCode: 'Heubod', name: 'Heuboden', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 4, basePrice: 135.0, floor: 'Nebengebäude', sortOrder: 12, housekeepingStatus: 'clean', specialCleaningNote: 'Keine Wäsche' },
+    { roomCode: 'Kammer', name: 'Gesinde Kammer', categoryCode: 'EZ', categoryName: 'Einzelzimmer', baseBeds: 1, maxCapacity: 1, basePrice: 65.0, floor: 'Nebengebäude', sortOrder: 13, housekeepingStatus: 'clean' },
+    { roomCode: 'Luisa', name: 'Suite Luisa', categoryCode: 'SUITE', categoryName: 'Suite 120', baseBeds: 2, maxCapacity: 3, basePrice: 125.0, floor: 'Nebengebäude', sortOrder: 14, housekeepingStatus: 'clean' },
   ];
 
   for (const r of roomData) {
-    await client.execute({
-      sql: `INSERT OR REPLACE INTO rooms (room_code, name, category_code, category_name, base_beds, max_capacity, base_price, floor, sort_order, housekeeping_status, special_cleaning_note)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [r.roomCode, r.name, r.categoryCode, r.categoryName, r.baseBeds, r.maxCapacity, r.basePrice, r.floor, r.sortOrder, r.housekeepingStatus, r.specialCleaningNote || null]
+    const existing = await client.execute({
+      sql: `SELECT id FROM rooms WHERE room_code = ?`,
+      args: [r.roomCode]
     });
+    if (existing.rows && existing.rows.length > 0) {
+      await client.execute({
+        sql: `UPDATE rooms SET name = ?, category_code = ?, category_name = ?, base_beds = ?, max_capacity = ?, base_price = ?, floor = ?, sort_order = ?, housekeeping_status = ?, special_cleaning_note = ? WHERE room_code = ?`,
+        args: [r.name, r.categoryCode, r.categoryName, r.baseBeds, r.maxCapacity, r.basePrice, r.floor, r.sortOrder, r.housekeepingStatus, r.specialCleaningNote || null, r.roomCode]
+      });
+    } else {
+      await client.execute({
+        sql: `INSERT INTO rooms (room_code, name, category_code, category_name, base_beds, max_capacity, base_price, floor, sort_order, housekeeping_status, special_cleaning_note)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [r.roomCode, r.name, r.categoryCode, r.categoryName, r.baseBeds, r.maxCapacity, r.basePrice, r.floor, r.sortOrder, r.housekeepingStatus, r.specialCleaningNote || null]
+      });
+    }
   }
 
   // 2. Preisvarianten (aus Bild 05)

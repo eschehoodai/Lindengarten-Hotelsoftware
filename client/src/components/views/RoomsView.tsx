@@ -112,9 +112,8 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
               <th className="py-1.5 px-3 border-r border-slate-300 w-16">Code</th>
               <th className="py-1.5 px-3 border-r border-slate-300">Zimmerbezeichnung</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-24">Kategorie</th>
-              <th className="py-1.5 px-3 border-r border-slate-300 w-24">Kapazität</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-28">Basispreis (Brutto)</th>
-              <th className="py-1.5 px-3 border-r border-slate-300 w-32">Gebäude/Etage</th>
+              <th className="py-1.5 px-3 border-r border-slate-300 w-32">Gebäude</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-36">Housekeeping</th>
               <th className="py-1.5 px-3">Besonderer Hinweis</th>
             </tr>
@@ -138,10 +137,7 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
                   <td className="py-1 px-3 border-r border-slate-200/50 font-bold">{room.roomCode}</td>
                   <td className="py-1 px-3 border-r border-slate-200/50 font-sans">{room.name}</td>
                   <td className="py-1 px-3 border-r border-slate-200/50">{room.categoryCode}</td>
-                  <td className="py-1 px-3 border-r border-slate-200/50 font-sans">
-                    {room.baseBeds} Betten (max. {room.maxCapacity})
-                  </td>
-                  <td className="py-1 px-3 border-r border-slate-200/50">{room.basePrice.toFixed(2)} €</td>
+                  <td className="py-1 px-3 border-r border-slate-200/50">{(Number(room.basePrice) || 0).toFixed(2)} €</td>
                   <td className="py-1 px-3 border-r border-slate-200/50 font-sans">{room.floor}</td>
                   <td className="py-1 px-3 border-r border-slate-200/50 font-sans">
                     <span
@@ -254,36 +250,28 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Betten / Max Kapazität</label>
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  disabled={!isEditing}
-                  value={formData.baseBeds}
-                  onChange={(e) => setFormData({ ...formData, baseBeds: parseInt(e.target.value) || 1 })}
-                  className="w-1/2 bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
-                  placeholder="Betten"
-                />
-                <input
-                  type="number"
-                  disabled={!isEditing}
-                  value={formData.maxCapacity}
-                  onChange={(e) => setFormData({ ...formData, maxCapacity: parseInt(e.target.value) || 1 })}
-                  className="w-1/2 bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
-                  placeholder="Max"
-                />
-              </div>
+              <label className="text-[10px] text-slate-500 uppercase font-semibold">Betten</label>
+              <input
+                type="number"
+                disabled={!isEditing}
+                value={formData.baseBeds}
+                onChange={(e) => setFormData({ ...formData, baseBeds: parseInt(e.target.value) || 1 })}
+                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+                placeholder="Betten"
+              />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Gebäude / Etage</label>
-              <input
-                type="text"
+              <label className="text-[10px] text-slate-500 uppercase font-semibold">Gebäude</label>
+              <select
                 disabled={!isEditing}
-                value={formData.floor}
+                value={formData.floor === 'Nebengebäude' ? 'Nebengebäude' : 'Hauptgebäude'}
                 onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
-              />
+                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-semibold disabled:bg-slate-100 cursor-pointer"
+              >
+                <option value="Hauptgebäude">Hauptgebäude</option>
+                <option value="Nebengebäude">Nebengebäude</option>
+              </select>
             </div>
 
             <div className="flex flex-col gap-1">
