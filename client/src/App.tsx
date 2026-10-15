@@ -93,27 +93,39 @@ export function sanitizeReservation(r: any): Reservation {
   };
 }
 
+const CURRENT_DATA_VERSION = 'v2_10_october_bookings';
+
 export function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timeline');
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
   const [reservations, setReservations] = useState<Reservation[]>(() => {
     try {
-      const saved = localStorage.getItem('lindengarten_reservations');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((r: any) => sanitizeReservation(r));
+      const version = localStorage.getItem('lindengarten_data_version');
+      if (version === CURRENT_DATA_VERSION) {
+        const saved = localStorage.getItem('lindengarten_reservations');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length >= 10) {
+            return parsed.map((r: any) => sanitizeReservation(r));
+          }
         }
       }
+      localStorage.setItem('lindengarten_data_version', CURRENT_DATA_VERSION);
+      localStorage.setItem('lindengarten_reservations', JSON.stringify(INITIAL_RESERVATIONS));
+      localStorage.setItem('lindengarten_guests', JSON.stringify(INITIAL_GUESTS));
+      localStorage.setItem('lindengarten_invoices', JSON.stringify(INITIAL_INVOICES));
     } catch {}
     return INITIAL_RESERVATIONS;
   });
   const [guests, setGuests] = useState<Guest[]>(() => {
     try {
-      const saved = localStorage.getItem('lindengarten_guests');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const version = localStorage.getItem('lindengarten_data_version');
+      if (version === CURRENT_DATA_VERSION) {
+        const saved = localStorage.getItem('lindengarten_guests');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length >= 10) return parsed;
+        }
       }
     } catch {}
     return INITIAL_GUESTS;
@@ -122,10 +134,13 @@ export function App() {
   const [priceVariants, setPriceVariants] = useState<PriceVariant[]>(INITIAL_PRICE_VARIANTS);
   const [invoices, setInvoices] = useState<Invoice[]>(() => {
     try {
-      const saved = localStorage.getItem('lindengarten_invoices');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const version = localStorage.getItem('lindengarten_data_version');
+      if (version === CURRENT_DATA_VERSION) {
+        const saved = localStorage.getItem('lindengarten_invoices');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
       }
     } catch {}
     return INITIAL_INVOICES as any;

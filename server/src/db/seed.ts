@@ -239,30 +239,76 @@ async function seedData() {
     });
   }
 
-  // 4. Beispiel-Gäste anlegen
-  const guest1 = await client.execute({
-    sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
-          VALUES ('178847', 'David', 1, 'Sehr geehrter Herr', 'David', 'Klaus', '', 'Marktplatz 4', '96264', 'Altenkunstadt', 'Deutschland', '09572-12345', 'klaus.david@example.de', 1, datetime('now'))
-          RETURNING id;`,
-    args: []
-  });
-  const guest1Id = Number(guest1.rows[0].id);
+  // 4. Tabellen vor erneutem Seeding leeren
+  await client.execute(`DELETE FROM invoice_items;`);
+  await client.execute(`DELETE FROM invoices;`);
+  await client.execute(`DELETE FROM reservations;`);
+  await client.execute(`DELETE FROM guests;`);
 
-  const guest2 = await client.execute({
-    sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
-          VALUES ('18506', 'Junghans', 3, 'Sehr geehrte Familie', 'Junghans', 'Torsten', '', 'Lindenallee 12', '04109', 'Leipzig', 'Deutschland', '0341-987654', 'junghans.familie@example.de', 0, datetime('now'))
-          RETURNING id;`,
-    args: []
-  });
-  const guest2Id = Number(guest2.rows[0].id);
+  // 10 Gäste mit Fantasie-Daten anlegen
+  const guestsToInsert = [
+    {
+      guestNumber: '178847', searchName: 'David', titleCode: 1, salutation: 'Sehr geehrter Herr',
+      lastName: 'David', firstName: 'Klaus', name2: '', street: 'Marktplatz 4', zipCode: '96264',
+      city: 'Altenkunstadt', country: 'Deutschland', phone: '09572-12345', email: 'klaus.david@example.de', isRegularGuest: 1
+    },
+    {
+      guestNumber: '18506', searchName: 'Junghans', titleCode: 3, salutation: 'Sehr geehrte Familie',
+      lastName: 'Junghans', firstName: 'Torsten', name2: '', street: 'Lindenallee 12', zipCode: '04109',
+      city: 'Leipzig', country: 'Deutschland', phone: '0341-987654', email: 'junghans.familie@example.de', isRegularGuest: 0
+    },
+    {
+      guestNumber: '117799', searchName: 'Hanse Touristik', titleCode: 4, salutation: 'Sehr geehrte Damen und Herren',
+      lastName: 'Langerwisch', firstName: 'Marion', name2: 'Hanse Touristik Hamburg GmbH', street: 'Hafenstraße 100', zipCode: '20457',
+      city: 'Hamburg', country: 'Deutschland', phone: '040-5551234', email: 'info@hanse-touristik.de', isRegularGuest: 1
+    },
+    {
+      guestNumber: '18531', searchName: 'Bergmann', titleCode: 7, salutation: 'Sehr geehrte Frau Dr.',
+      lastName: 'Bergmann', firstName: 'Stefanie', name2: '', street: 'Rosenweg 14', zipCode: '01067',
+      city: 'Dresden', country: 'Deutschland', phone: '0351-4458912', email: 'stefanie.bergmann@sachsen-med.de', isRegularGuest: 1
+    },
+    {
+      guestNumber: '18532', searchName: 'Buchenau', titleCode: 1, salutation: 'Sehr geehrter Herr',
+      lastName: 'von Buchenau', firstName: 'Maximilian', name2: '', street: 'Schlossallee 7', zipCode: '99084',
+      city: 'Erfurt', country: 'Deutschland', phone: '0361-7892341', email: 'm.buchenau@buchenau-forst.de', isRegularGuest: 0
+    },
+    {
+      guestNumber: '18533', searchName: 'Klein', titleCode: 3, salutation: 'Sehr geehrte Familie',
+      lastName: 'Klein', firstName: 'Sarah', name2: '', street: 'Birkenhain 22', zipCode: '10437',
+      city: 'Berlin', country: 'Deutschland', phone: '030-89127634', email: 'familie.klein.berlin@web-mail.de', isRegularGuest: 0
+    },
+    {
+      guestNumber: '18534', searchName: 'Weber', titleCode: 8, salutation: 'Sehr geehrter Herr Prof.',
+      lastName: 'Weber', firstName: 'Heinrich', name2: '', street: 'Universitätsstraße 18', zipCode: '04109',
+      city: 'Leipzig', country: 'Deutschland', phone: '0341-3322110', email: 'h.weber@uni-leipzig-forschung.de', isRegularGuest: 1
+    },
+    {
+      guestNumber: '18535', searchName: 'Sonnenschein', titleCode: 2, salutation: 'Sehr geehrte Frau',
+      lastName: 'Sonnenschein', firstName: 'Claudia', name2: '', street: 'Am Kurpark 5', zipCode: '02797',
+      city: 'Kurort Oybin', country: 'Deutschland', phone: '035844-71239', email: 'c.sonnenschein@oybin-tour.de', isRegularGuest: 0
+    },
+    {
+      guestNumber: '18536', searchName: 'Wunderlich', titleCode: 1, salutation: 'Sehr geehrter Herr',
+      lastName: 'Wunderlich', firstName: 'Felix', name2: '', street: 'Bergstraße 88', zipCode: '02763',
+      city: 'Zittau', country: 'Deutschland', phone: '03583-667788', email: 'f.wunderlich@oberlausitz-design.de', isRegularGuest: 0
+    },
+    {
+      guestNumber: '18537', searchName: 'Meister', titleCode: 3, salutation: 'Sehr geehrte Familie',
+      lastName: 'Meister', firstName: 'Sabine', name2: '', street: 'Sonnenhang 3', zipCode: '09112',
+      city: 'Chemnitz', country: 'Deutschland', phone: '0371-5544332', email: 'meister.familie@sachsen-mail.de', isRegularGuest: 1
+    }
+  ];
 
-  const guest3 = await client.execute({
-    sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
-          VALUES ('117799', 'Hanse Touristik', 4, 'Sehr geehrte Damen und Herren', 'Langerwisch', 'Marion', 'Hanse Touristik Hamburg GmbH', 'Hafenstraße 100', '20457', 'Hamburg', 'Deutschland', '040-5551234', 'info@hanse-touristik.de', 1, datetime('now'))
-          RETURNING id;`,
-    args: []
-  });
-  const guest3Id = Number(guest3.rows[0].id);
+  const guestIds: number[] = [];
+  for (const g of guestsToInsert) {
+    const res = await client.execute({
+      sql: `INSERT INTO guests (guest_number, search_name, title_code, salutation, last_name, first_name, name_2, street, zip_code, city, country, phone, email, is_regular_guest, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            RETURNING id;`,
+      args: [g.guestNumber, g.searchName, g.titleCode, g.salutation, g.lastName, g.firstName, g.name2, g.street, g.zipCode, g.city, g.country, g.phone, g.email, g.isRegularGuest]
+    });
+    guestIds.push(Number(res.rows[0].id));
+  }
 
   // Zimmer-IDs ermitteln
   const roomsRes = await client.execute(`SELECT id, room_code FROM rooms;`);
@@ -271,56 +317,157 @@ async function seedData() {
     roomMap.set(String(row.room_code), Number(row.id));
   }
 
-  // 5. Buchungen anlegen (entsprechend der Screenshots für Oktober 2026)
-  // Buchung 1: Hanse Touristik in Zimmer 4
-  const res1 = await client.execute({
-    sql: `INSERT INTO reservations (reservation_number, guest_id, room_id, arrival_date, departure_date, nights, adults_count, price_variant, price_per_night, total_price, is_arrived, has_breakfast, breakfast_count, billing_debitor, created_at)
-          VALUES ('178840', ?, ?, '2026-10-05', '2026-10-10', 5, 2, 'Doppelt belegt', 90.0, 450.0, 1, 1, 2, 'Hanse Touristik Hamburg GmbH', datetime('now'))
-          RETURNING id;`,
-    args: [guest3Id, roomMap.get('4')!]
-  });
-  const res1Id = Number(res1.rows[0].id);
+  // 5. Buchungen anlegen (10 Buchungen, 4-8 Tage, alle im Oktober 2026)
+  const reservationsToInsert = [
+    {
+      reservationNumber: '178840', guestId: guestIds[2], roomId: roomMap.get('4')!,
+      arrivalDate: '2026-10-02', departureDate: '2026-10-07', nights: 5, adultsCount: 2, childrenCount: 0,
+      companionNames: '', priceVariant: 'Doppelt belegt', pricePerNight: 90.0, totalPrice: 450.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, billingDebitor: 'Hanse Touristik Hamburg GmbH'
+    },
+    {
+      reservationNumber: '18506', guestId: guestIds[1], roomId: roomMap.get('Herman')!,
+      arrivalDate: '2026-10-09', departureDate: '2026-10-15', nights: 6, adultsCount: 2, childrenCount: 1,
+      companionNames: 'Aline, Torsten und Lea', priceVariant: 'Dreifach belegt', pricePerNight: 166.0, totalPrice: 996.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: '2Gang', hasBreakfast: 1, breakfastCount: 3, twoGangCount: 3, dinnerCount: 3,
+      dailyArrangement: 'Angebot F/ 2 Gang', billingDebitor: 'Junghans'
+    },
+    {
+      reservationNumber: '18520', guestId: guestIds[0], roomId: roomMap.get('Prinze')!,
+      arrivalDate: '2026-10-14', departureDate: '2026-10-18', nights: 4, adultsCount: 1, childrenCount: 0,
+      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 130.0, totalPrice: 520.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, billingDebitor: 'David'
+    },
+    {
+      reservationNumber: '18521', guestId: guestIds[3], roomId: roomMap.get('1')!,
+      arrivalDate: '2026-10-03', departureDate: '2026-10-10', nights: 7, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Dr. Stefanie & Thomas Bergmann', priceVariant: 'Doppelt belegt', pricePerNight: 85.0, totalPrice: 595.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, dailyArrangement: 'Frühstücksbuffet', billingDebitor: 'Bergmann'
+    },
+    {
+      reservationNumber: '18522', guestId: guestIds[4], roomId: roomMap.get('2')!,
+      arrivalDate: '2026-10-12', departureDate: '2026-10-17', nights: 5, adultsCount: 1, childrenCount: 0,
+      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 85.0, totalPrice: 425.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, billingDebitor: 'von Buchenau'
+    },
+    {
+      reservationNumber: '18523', guestId: guestIds[5], roomId: roomMap.get('Stall')!,
+      arrivalDate: '2026-10-01', departureDate: '2026-10-09', nights: 8, adultsCount: 2, childrenCount: 1,
+      companionNames: 'Sarah, Michael und Tim Klein', priceVariant: 'Dreifach belegt', pricePerNight: 145.0, totalPrice: 1160.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 3, dailyArrangement: 'Frühstücksbuffet Suite', billingDebitor: 'Klein'
+    },
+    {
+      reservationNumber: '18524', guestId: guestIds[6], roomId: roomMap.get('Scheun')!,
+      arrivalDate: '2026-10-18', departureDate: '2026-10-24', nights: 6, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Prof. Dr. Heinrich & Dr. Gisela Weber', priceVariant: 'Doppelt belegt', pricePerNight: 140.0, totalPrice: 840.0,
+      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: '3Gang', hasBreakfast: 1, breakfastCount: 2, threeGangCount: 2, dinnerCount: 2, dailyArrangement: 'Gourmet HP 3-Gang', billingDebitor: 'Weber'
+    },
+    {
+      reservationNumber: '18525', guestId: guestIds[7], roomId: roomMap.get('Tobias')!,
+      arrivalDate: '2026-10-06', departureDate: '2026-10-13', nights: 7, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Claudia & Bernd Sonnenschein', priceVariant: 'Doppelt belegt', pricePerNight: 95.0, totalPrice: 665.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, billingDebitor: 'Sonnenschein'
+    },
+    {
+      reservationNumber: '18526', guestId: guestIds[8], roomId: roomMap.get('Kammer')!,
+      arrivalDate: '2026-10-21', departureDate: '2026-10-26', nights: 5, adultsCount: 1, childrenCount: 0,
+      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 65.0, totalPrice: 325.0,
+      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, billingDebitor: 'Wunderlich'
+    },
+    {
+      reservationNumber: '18527', guestId: guestIds[9], roomId: roomMap.get('Luisa')!,
+      arrivalDate: '2026-10-23', departureDate: '2026-10-29', nights: 6, adultsCount: 2, childrenCount: 1,
+      companionNames: 'Sabine, Jörg und Felix Meister', priceVariant: 'Dreifach belegt', pricePerNight: 155.0, totalPrice: 930.0,
+      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: '2Gang', hasBreakfast: 1, breakfastCount: 3, twoGangCount: 3, dinnerCount: 3, dailyArrangement: 'Halbpension 2-Gang', billingDebitor: 'Meister'
+    }
+  ];
 
-  // Buchung 2: Junghans in Zimmer Herman (5 Ü, 3 P, 830 €)
-  await client.execute({
-    sql: `INSERT INTO reservations (reservation_number, guest_id, room_id, arrival_date, departure_date, nights, adults_count, children_count, companion_names, price_variant, price_per_night, total_price, is_arrived, daily_arrangement, billing_debitor, created_at)
-          VALUES ('18506', ?, ?, '2026-10-10', '2026-10-15', 5, 2, 1, 'Aline, Torsten und Lea', 'Dreifach belegt', 166.0, 830.0, 1, 'Angebot F/ 2 Gang', 'Junghans', datetime('now'));`,
-    args: [guest2Id, roomMap.get('Herman')!]
-  });
+  const reservationIds: number[] = [];
+  for (const r of reservationsToInsert) {
+    const res = await client.execute({
+      sql: `INSERT INTO reservations (
+              reservation_number, guest_id, room_id, arrival_date, departure_date, nights,
+              adults_count, children_count, companion_names, price_variant, price_per_night, total_price,
+              is_arrived, is_departed, is_written_reservation, is_locked_to_room, board_type,
+              has_breakfast, breakfast_count, two_gang_count, three_gang_count, dinner_count,
+              daily_arrangement, billing_debitor, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            RETURNING id;`,
+      args: [
+        r.reservationNumber, r.guestId, r.roomId, r.arrivalDate, r.departureDate, r.nights,
+        r.adultsCount, r.childrenCount || 0, r.companionNames || '', r.priceVariant, r.pricePerNight, r.totalPrice,
+        r.isArrived, r.isDeparted || 0, r.isWrittenReservation, r.isLockedToRoom, r.boardType || 'Frühstück',
+        r.hasBreakfast, r.breakfastCount || 1, r.twoGangCount || 0, r.threeGangCount || 0, r.dinnerCount || 0,
+        r.dailyArrangement || null, r.billingDebitor || '',
+      ]
+    });
+    reservationIds.push(Number(res.rows[0].id));
+  }
 
-  // Buchung 3: David in Prinze (12.10.2026 - 13.10.2026)
-  await client.execute({
-    sql: `INSERT INTO reservations (reservation_number, guest_id, room_id, arrival_date, departure_date, nights, adults_count, price_variant, price_per_night, total_price, is_arrived, is_locked_to_room, has_breakfast, breakfast_count, billing_debitor, created_at)
-          VALUES ('18520', ?, ?, '2026-10-12', '2026-10-13', 1, 1, 'Einfach belegt', 130.0, 130.0, 0, 1, 1, 1, 'David', datetime('now'));`,
-    args: [guest1Id, roomMap.get('Prinze')!]
-  });
-
-  // 6. Rechnung mit Folio-Split anlegen (aus Bild 04!)
-  // Folio A: Übernachtung 450 € (Hanse Touristik)
-  // Folio B: Parkplatz 25 €
-  const inv = await client.execute({
+  // 6. Beispiel-Rechnungen anlegen
+  // Rechnung 1: Hanse Touristik (Bezahlt)
+  const inv1 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117799', ?, ?, '2026-10-09', '2026-10-05', '2026-10-10', 420.56, 29.44, 21.01, 3.99, 22.50, 497.50, 'BAR', 1, datetime('now'))
+          VALUES ('117799', ?, ?, '2026-10-06', '2026-10-02', '2026-10-07', 420.56, 29.44, 21.01, 3.99, 22.50, 497.50, 'BAR', 1, datetime('now'))
           RETURNING id;`,
-    args: [res1Id, guest3Id]
+    args: [reservationIds[0], guestIds[2]]
   });
-  const invId = Number(inv.rows[0].id);
+  const inv1Id = Number(inv1.rows[0].id);
 
-  // Position A: Marion Langerwisch Übernachtung 5 Nächte à 90 = 450 € (7 % MwSt)
   await client.execute({
     sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
-          VALUES (?, 'A', 1, 'Marion Langerwisch 178847', '4', 5.0, 90.0, 450.0, 0.07, 2, 'LODGING', '2026-10-05', '2026-10-10', 'Doppelt belegt FuB-Gr.: 2');`,
-    args: [invId]
+          VALUES (?, 'A', 1, 'Marion Langerwisch 178847', '4', 5.0, 90.0, 450.0, 0.07, 2, 'LODGING', '2026-10-02', '2026-10-07', 'Doppelt belegt');`,
+    args: [inv1Id]
   });
 
-  // Position B: Parkplatz 5 Tage à 5 = 25 € (19 % MwSt)
   await client.execute({
     sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
-          VALUES (?, 'B', 2, 'Parkplatz', '4', 5.0, 5.0, 25.0, 0.19, 1, 'SERVICE', '2026-10-09', '2026-10-09', '');`,
-    args: [invId]
+          VALUES (?, 'B', 2, 'Parkplatz', '4', 5.0, 5.0, 25.0, 0.19, 1, 'SERVICE', '2026-10-06', '2026-10-06', '');`,
+    args: [inv1Id]
   });
 
-  console.log('✅ Seeding erfolgreich abgeschlossen! Alle Lindengarten-Zimmer, Preisvarianten, Anreden, Reservierungen und Rechnungen wurden angelegt.');
+  // Rechnung 2: Junghans (Offen)
+  const inv2 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('117800', ?, ?, '2026-10-14', '2026-10-09', '2026-10-15', 800.00, 56.00, 117.65, 22.35, 45.00, 1041.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[1], guestIds[1]]
+  });
+  const inv2Id = Number(inv2.rows[0].id);
+
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Familie Torsten Junghans', 'Herman', 6.0, 166.0, 996.0, 0.07, 2, 'LODGING', '2026-10-09', '2026-10-15', 'Dreifach belegt');`,
+    args: [inv2Id]
+  });
+
+  // Rechnung 3: Dr. Stefanie Bergmann (Bezahlt)
+  const inv3 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('117801', ?, ?, '2026-10-09', '2026-10-03', '2026-10-10', 556.07, 38.93, 23.53, 4.47, 31.50, 654.50, 'EC-Karte', 1, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[3], guestIds[3]]
+  });
+  const inv3Id = Number(inv3.rows[0].id);
+
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Dr. Stefanie Bergmann', '1', 7.0, 85.0, 595.0, 0.07, 2, 'LODGING', '2026-10-03', '2026-10-10', 'Doppelt belegt');`,
+    args: [inv3Id]
+  });
+
+  console.log('✅ Seeding erfolgreich abgeschlossen! 10 Gäste und 10 Reservierungen (4-8 Tage, Oktober 2026) wurden angelegt.');
 }
 
 async function main() {
