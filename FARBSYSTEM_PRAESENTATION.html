@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farbsystem & Design-Präsentation • Hotel Lindengarten</title>
+  <style>
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+      /* Standard: Matte & Ruhige Palette */
+      --c-res: #cf8232;
+      --c-res-border: #b06a1f;
+      --c-res-text: #0f141c;
+
+      --c-arr: #397356;
+      --c-arr-border: #27533c;
+
+      --c-dep: #7f8c9b;
+      --c-dep-border: #616d7a;
+
+      --c-grp: #376189;
+      --c-grp-border: #264563;
+
+      --c-weekend: #b84d4d;
+      --c-mauve-bg: #e5d0e2;
+      --c-mauve-text: #502d4b;
+
+      --c-paid: #2ea36f;
+      --c-part: #d4973b;
+      --c-open: #bd4343;
+
+      --c-header: #242c38;
+      --c-actionbar: #c5ccd6;
+      --c-canvas: #e5eaf0;
+      --c-purple: #6d5684;
+    }
+
+    /* Greller Vergleichsmodus */
+    body.loud-mode {
+      --c-res: #f59e0b;
+      --c-res-border: #d97706;
+      --c-res-text: #0f172a;
+
+      --c-arr: #059669;
+      --c-arr-border: #047857;
+
+      --c-dep: #94a3b8;
+      --c-dep-border: #64748b;
+
+      --c-grp: #2563eb;
+      --c-grp-border: #1d4ed8;
+
+      --c-weekend: #f43f5e;
+      --c-mauve-bg: #f5d0fe;
+      --c-mauve-text: #4a044e;
+
+      --c-paid: #10b981;
+      --c-part: #fbbf24;
+      --c-open: #e11d48;
+
+      --c-header: #1e293b;
+      --c-actionbar: #cbd5e1;
+      --c-canvas: #e2e8f0;
+      --c-purple: #9333ea;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--c-canvas);
+      color: #0f172a;
+      line-height: 1.5;
+      padding: 32px 24px;
+      transition: background 0.25s ease;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+      border: 1px solid #c5ccd6;
+      overflow: hidden;
+    }
+    header {
+      background: var(--c-header);
+      color: #ffffff;
+      padding: 36px 40px;
+      border-bottom: 3px solid var(--c-grp);
+      transition: background 0.25s;
+    }
+    .badge-top {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(57, 115, 86, 0.35);
+      border: 1px solid rgba(72, 188, 137, 0.45);
+      color: #86d4b1;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      margin-bottom: 8px;
+    }
+    header p {
+      color: #cbd5e1;
+      font-size: 15px;
+      max-width: 800px;
+    }
+
+    /* INTERAKTIVER VERGLEICHS-SCHALTER */
+    .palette-switcher-bar {
+      background: #ffffff;
+      border-bottom: 1px solid #e2e8f0;
+      padding: 16px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    .mode-toggle-group {
+      display: inline-flex;
+      background: #f1f4f8;
+      border: 1px solid #c5ccd6;
+      border-radius: 8px;
+      padding: 3px;
+    }
+    .mode-btn {
+      padding: 6px 14px;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      background: transparent;
+      color: #4f5c6e;
+      transition: all 0.2s;
+    }
+    .mode-btn.active {
+      background: #ffffff;
+      color: var(--c-grp);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .mode-indicator-text {
+      font-size: 13px;
+      color: #4f5c6e;
+    }
+
+    .intro-banner {
+      background: #ebf2f8;
+      border-left: 4px solid var(--c-grp);
+      padding: 16px 24px;
+      margin: 20px 40px 0;
+      border-radius: 0 8px 8px 0;
+      font-size: 14px;
+      color: #264563;
+    }
+    .content {
+      padding: 24px 40px 48px;
+    }
+    h2 {
+      font-size: 20px;
+      font-weight: 700;
+      color: #18202c;
+      border-bottom: 2px solid #e5eaf0;
+      padding-bottom: 8px;
+      margin: 40px 0 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h2:first-of-type {
+      margin-top: 10px;
+    }
+    .section-desc {
+      font-size: 14px;
+      color: #4f5c6e;
+      margin-bottom: 20px;
+    }
+    .swatch-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .swatch-card {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .swatch-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .swatch-bar {
+      height: 64px;
+      width: 100%;
+      position: relative;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 6px 10px;
+      transition: background 0.25s ease;
+    }
+    .swatch-badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(0, 0, 0, 0.45);
+      color: #fff;
+      backdrop-filter: blur(4px);
+    }
+    .swatch-info {
+      padding: 12px 14px;
+    }
+    .swatch-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #18202c;
+      margin-bottom: 4px;
+    }
+    .swatch-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .hex-code {
+      font-weight: 700;
+      color: var(--c-grp);
+      background: #ebf2f8;
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid #c4d8ea;
+      cursor: pointer;
+    }
+    .hex-code:hover {
+      background: #dce8f3;
+    }
+    .rgb-code {
+      color: #69778b;
+      font-size: 11px;
+    }
+    .swatch-desc {
+      font-size: 12px;
+      color: #4f5c6e;
+      line-height: 1.4;
+    }
+    
+    /* LIVE PREVIEW WIDGETS */
+    .preview-box {
+      background: #f8fafc;
+      border: 1px solid #c5ccd6;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 16px;
+    }
+    .preview-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #384252;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 14px;
+    }
+    .live-timeline-demo {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 6px;
+      border: 1px solid #e2e8f0;
+    }
+    .booking-bar {
+      height: 38px;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 700;
+      border: 1px solid transparent;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      transition: background 0.25s, border-color 0.25s, color 0.25s;
+    }
+    .bar-res {
+      background: var(--c-res);
+      color: var(--c-res-text);
+      border-color: var(--c-res-border);
+    }
+    .bar-arr {
+      background: var(--c-arr);
+      color: #ffffff;
+      border-color: var(--c-arr-border);
+    }
+    .bar-dep {
+      background: var(--c-dep);
+      color: #ffffff;
+      border-color: var(--c-dep-border);
+    }
+    .bar-grp {
+      background: var(--c-grp);
+      color: #ffffff;
+      border-color: var(--c-grp-border);
+    }
+    .status-r-badge {
+      background: var(--c-mauve-bg);
+      color: var(--c-mauve-text);
+      padding: 1px 6px;
+      border-radius: 3px;
+      font-family: var(--font-mono);
+      font-weight: 900;
+      transition: background 0.25s, color 0.25s;
+    }
+    .ampel-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.85);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+      transition: background 0.25s;
+    }
+    .dot-paid { background: var(--c-paid); }
+    .dot-part { background: var(--c-part); }
+    .dot-open { background: var(--c-open); }
+
+    /* ACTION BAR PREVIEW */
+    .actionbar-demo {
+      background: var(--c-actionbar);
+      border: 1px solid #7f8c9b;
+      padding: 10px 14px;
+      border-radius: 6px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      transition: background 0.25s;
+    }
+    .act-btn {
+      background: #ffffff;
+      border: 1px solid #7f8c9b;
+      border-radius: 4px;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #18202c;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .act-btn-save {
+      background: var(--c-arr);
+      color: #ffffff;
+      border-color: var(--c-arr-border);
+      transition: background 0.25s;
+    }
+    .act-btn-esc {
+      background: var(--c-header);
+      color: #ffffff;
+      border-color: #18202c;
+      transition: background 0.25s;
+    }
+
+    footer {
+      background: #f8fafc;
+      border-top: 1px solid #e2e8f0;
+      padding: 24px 40px;
+      font-size: 12px;
+      color: #4f5c6e;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .copy-toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: #0f141c;
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-size: 13px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      opacity: 0;
+      transition: opacity 0.2s;
+      pointer-events: none;
+      z-index: 999;
+    }
+    .copy-toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <div class="badge-top">Hotel Lindengarten • ELAN Web-Desktop v2.0</div>
+      <h1>Visuelle Farbsystem- & Kundenpräsentation</h1>
+      <p>
+        Harmonisierte, matte & augenschonende Farbwerte zur direkten Abstimmung mit der Geschäftsführung und dem Hotel-Team.
+      </p>
+    </header>
+
+    <!-- LIVE-UMSCHALTER ZUM VORFÜHREN -->
+    <div class="palette-switcher-bar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="font-size:13px; font-weight:700; color:#18202c;">Ansichtsmodus:</span>
+        <div class="mode-toggle-group">
+          <button id="btnMuted" class="mode-btn active" onclick="setPalette('muted')">
+            🌿 Matt & Ruhig (Neu / Empfohlen)
+          </button>
+          <button id="btnLoud" class="mode-btn" onclick="setPalette('loud')">
+            ⚡ Bisherig (Greller Vergleich)
+          </button>
+        </div>
+      </div>
+      <div id="modeStatusText" class="mode-indicator-text">
+        Aktive Ansicht: <strong>Mattes Natur- & Sandstein-Farbschema</strong> (Augenschonend bei 8h Dauerbetrieb).
+      </div>
+    </div>
+
+    <div class="intro-banner">
+      💡 <strong>Interaktive Präsentation:</strong> Nutzen Sie den Schalter oben, um Ihrem Kunden den direkten Unterschied zwischen den bisherigen, grellen Standardfarben und der neuen, ruhigen Salon-Palette zu demonstrieren. Jeder <strong>HEX-Code</strong> lässt sich per Klick kopieren.
+    </div>
+
+    <div class="content">
+
+      <!-- 1. BUCHUNGS- & STATUSFARBEN -->
+      <h2>1. Statusfarben der Zimmerbelegung (Timeline & Belegungsplan)</h2>
+      <p class="section-desc">
+        Diese Farben kennzeichnen in der 2D-Timeline den Aufenthaltsstatus der Hotelgäste. Sie wurden mit reduzierter Sättigung veredelt.
+      </p>
+
+      <div class="swatch-grid">
+        <!-- Reserviert -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-res);">
+            <span class="swatch-badge" style="color: #0f141c; background: rgba(255,255,255,0.7);">Text dunkel</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Reserviert (Standard vor Anreise)</div>
+            <div class="swatch-meta">
+              <span id="hex-res" class="hex-code" onclick="copyHex(this.textContent)">#cf8232</span>
+              <span id="rgb-res" class="rgb-code">RGB 207, 130, 50</span>
+            </div>
+            <div class="swatch-desc">Warmes Ocker/Sandstein statt Knallorange. Blendfrei und gestochen scharf lesbar.</div>
+          </div>
+        </div>
+
+        <!-- Im Haus -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-arr);">
+            <span class="swatch-badge">Check-In</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Im Haus (Eingecheckt)</div>
+            <div class="swatch-meta">
+              <span id="hex-arr" class="hex-code" onclick="copyHex(this.textContent)">#397356</span>
+              <span id="rgb-arr" class="rgb-code">RGB 57, 115, 86</span>
+            </div>
+            <div class="swatch-desc">Mattes Salbei- und Waldgrün. Angenehm, natürlich und gastfreundlich.</div>
+          </div>
+        </div>
+
+        <!-- Abgereist -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-dep);">
+            <span class="swatch-badge">Check-Out</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Abgereist (Check-Out erfolgt)</div>
+            <div class="swatch-meta">
+              <span id="hex-dep" class="hex-code" onclick="copyHex(this.textContent)">#7f8c9b</span>
+              <span id="rgb-dep" class="rgb-code">RGB 127, 140, 155</span>
+            </div>
+            <div class="swatch-desc">Gedämpftes Schiefergrau für Zimmer, die bereits geräumt und zur Reinigung anstehen.</div>
+          </div>
+        </div>
+
+        <!-- Pauschale / Gruppe -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-grp);">
+            <span class="swatch-badge">Sonderbuchung</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Pauschalangebot / Gruppe</div>
+            <div class="swatch-meta">
+              <span id="hex-grp" class="hex-code" onclick="copyHex(this.textContent)">#376189</span>
+              <span id="rgb-grp" class="rgb-code">RGB 55, 97, 137</span>
+            </div>
+            <div class="swatch-desc">Nordisches Schieferblau für Gruppen- oder Festpreisbuchungen.</div>
+          </div>
+        </div>
+
+        <!-- Wochenende Signalrot -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-weekend);">
+            <span class="swatch-badge">Sa & So</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Wochenende (Mattes Ziegelrot)</div>
+            <div class="swatch-meta">
+              <span id="hex-weekend" class="hex-code" onclick="copyHex(this.textContent)">#b84d4d</span>
+              <span id="rgb-weekend" class="rgb-code">RGB 184, 77, 77</span>
+            </div>
+            <div class="swatch-desc">Terracotta-Ziegelrot: Deutlich erkennbar, ohne im Kalenderkopf neon-artig zu stechen.</div>
+          </div>
+        </div>
+
+        <!-- Vorreserviert Mauve 'r' -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-mauve-bg); border-top: 4px solid var(--c-mauve-text);">
+            <span class="swatch-badge" style="color: var(--c-mauve-text); background: rgba(255,255,255,0.85); font-weight:800;">Status [r]</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Vorreserviert (Mattes Mauve)</div>
+            <div class="swatch-meta">
+              <span id="hex-mauve" class="hex-code" onclick="copyHex(this.textContent)">#e5d0e2</span>
+              <span id="rgb-mauve" class="rgb-code">Text: #502d4b</span>
+            </div>
+            <div class="swatch-desc">Sanftes Altrosa/Mauve für unbestätigte Vorreservierungen.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE VORSCHAU: TIMELINE BUCHUNGSBALKEN -->
+      <div class="preview-box">
+        <div class="preview-title">Live-Darstellung: Buchungsbalken in der Timeline</div>
+        <div class="live-timeline-demo">
+          <div class="booking-bar bar-res">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="status-r-badge">r</span>
+              <span>Junghans, Torsten (3 Ü) • Zimmer Herman</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="ampel-dot dot-open"></span>
+              <span style="font-size:11px;">Offen (255,00 €)</span>
+            </div>
+          </div>
+
+          <div class="booking-bar bar-arr">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>✓</span>
+              <span>David, Klaus (5 Ü) • Prinzessin von Sachsen Stube</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="ampel-dot dot-paid"></span>
+              <span style="font-size:11px;">Bezahlt (425,00 € BAR)</span>
+            </div>
+          </div>
+
+          <div class="booking-bar bar-grp">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>Hanse Touristik Hamburg GmbH (7 Ü) • Stall Suite</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="ampel-dot dot-part"></span>
+              <span style="font-size:11px;">Teilbezahlt (Folio-Split)</span>
+            </div>
+          </div>
+
+          <div class="booking-bar bar-dep">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span>🕒</span>
+              <span>Müller, Dr. Thomas (Abgereist / Check-Out)</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span class="ampel-dot dot-paid"></span>
+              <span style="font-size:11px;">Bezahlt (EC)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- 2. DAS 3-STUFEN-AMPELMODELL -->
+      <h2>2. Finanz- & Zahlungsstatus (Das 3-Stufen-Ampelmodell)</h2>
+      <p class="section-desc">
+        Sofortige Erkennbarkeit von Zahlungseingängen zur Vermeidung von Abrechnungsfehlern bei Abreisen und Folio-Splits.
+      </p>
+
+      <div class="swatch-grid">
+        <!-- Grün Bezahlt -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-paid);">
+            <span class="swatch-badge">Ampel Grün</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Vollständig Bezahlt</div>
+            <div class="swatch-meta">
+              <span id="hex-paid" class="hex-code" onclick="copyHex(this.textContent)">#2ea36f</span>
+              <span id="rgb-paid" class="rgb-code">RGB 46, 163, 111</span>
+            </div>
+            <div class="swatch-desc">Sanftes Lindengrün. Alle Rechnungen und Folios der Buchung sind vollständig beglichen.</div>
+          </div>
+        </div>
+
+        <!-- Gelb/Orange Teilbezahlt -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-part);">
+            <span class="swatch-badge" style="color:#0f141c; background:rgba(255,255,255,0.7);">Ampel Gelb/Orange</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Teilbezahlt (Folio-Splits)</div>
+            <div class="swatch-meta">
+              <span id="hex-part" class="hex-code" onclick="copyHex(this.textContent)">#d4973b</span>
+              <span id="rgb-part" class="rgb-code">RGB 212, 151, 59</span>
+            </div>
+            <div class="swatch-desc">Bernsteingold. Mindestens ein Folio-Konto bezahlt, aber noch Restbeträge offen.</div>
+          </div>
+        </div>
+
+        <!-- Rot Offen -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-open);">
+            <span class="swatch-badge">Ampel Rot</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Zahlung Offen / Unbezahlt</div>
+            <div class="swatch-meta">
+              <span id="hex-open" class="hex-code" onclick="copyHex(this.textContent)">#bd4343</span>
+              <span id="rgb-open" class="rgb-code">RGB 189, 67, 67</span>
+            </div>
+            <div class="swatch-desc">Gedämpftes Karminrot. Eindeutiges Signal für offenen Saldo bei der Abreise.</div>
+          </div>
+        </div>
+      </div>
+
+
+      <!-- 3. UI-CHROME & BEDIENTASTEN -->
+      <h2>3. Desktop-UI Chrome & Standard-Aktionsleiste</h2>
+      <p class="section-desc">
+        Der Rahmen der Hotelsoftware kombiniert dunkles Schiefergrau für die Navigation mit dem warmen Windows-Desktop-Look der Tastaturleiste.
+      </p>
+
+      <div class="swatch-grid">
+        <!-- Slate 800 Header -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-header);">
+            <span class="swatch-badge">Header</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Slate 800 (Titelleiste & Footer)</div>
+            <div class="swatch-meta">
+              <span id="hex-header" class="hex-code" onclick="copyHex(this.textContent)">#242c38</span>
+              <span id="rgb-header" class="rgb-code">RGB 36, 44, 56</span>
+            </div>
+            <div class="swatch-desc">Weicheres Anthrazit/Schiefergrau statt hartem Blauschwarz.</div>
+          </div>
+        </div>
+
+        <!-- Slate 300 Aktionsleiste -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-actionbar);">
+            <span class="swatch-badge" style="color:#0f141c; background:rgba(255,255,255,0.7);">Kieselgrau</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Slate 300 (Aktionsleiste Unten)</div>
+            <div class="swatch-meta">
+              <span id="hex-actionbar" class="hex-code" onclick="copyHex(this.textContent)">#c5ccd6</span>
+              <span id="rgb-actionbar" class="rgb-code">RGB 197, 204, 214</span>
+            </div>
+            <div class="swatch-desc">Warmes Desktop-Kieselgrau für die Hotkey-Leiste [F6] bis [Esc].</div>
+          </div>
+        </div>
+
+        <!-- Purple 600 Kassenbelege -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: var(--c-purple);">
+            <span class="swatch-badge">Freie Kasse</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Pflaume (Kassenbelege)</div>
+            <div class="swatch-meta">
+              <span id="hex-purple" class="hex-code" onclick="copyHex(this.textContent)">#6d5684</span>
+              <span id="rgb-purple" class="rgb-code">RGB 109, 86, 132</span>
+            </div>
+            <div class="swatch-desc">Mattes Schieferviolett für Restaurant-/Thekenverkäufe ohne Zimmerbezug.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LIVE VORSCHAU: DIE AKTIONSLEISTE -->
+      <div class="preview-box">
+        <div class="preview-title">Live-Darstellung: Standard-Aktionsleiste mit F-Tasten</div>
+        <div class="actionbar-demo">
+          <button class="act-btn">
+            <span style="color:#2ea36f;">✓</span>
+            <span>[F6] Wählen</span>
+          </button>
+          <button class="act-btn">
+            <span style="color:#2ea36f;">+</span>
+            <span>[F7] Neu / Einfügen</span>
+          </button>
+          <button class="act-btn">
+            <span style="color:#376189;">📋</span>
+            <span>[F8] Kopieren</span>
+          </button>
+          <button class="act-btn">
+            <span style="color:#6d5684;">✏️</span>
+            <span>[F9] Ändern</span>
+          </button>
+          <button class="act-btn act-btn-save">
+            <span>💾</span>
+            <span>[F9] Speichern</span>
+          </button>
+          <button class="act-btn">
+            <span style="color:#bd4343;">🗑️</span>
+            <span>[Entf] Löschen</span>
+          </button>
+          <button class="act-btn act-btn-esc">
+            <span style="color:#d4973b;">⏻</span>
+            <span>[Esc] Beenden</span>
+          </button>
+        </div>
+      </div>
+
+
+      <!-- 4. HOUSEKEEPING & ZIMMERHYGIENE -->
+      <h2>4. Housekeeping & Zimmerhygiene (RoomsView)</h2>
+      <p class="section-desc">
+        Sofortige Information für Empfang und Etage, welche Zimmer bezugsfertig sind.
+      </p>
+
+      <div class="swatch-grid">
+        <!-- Sauber -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: #edf6f1; border-top: 3px solid #397356;">
+            <span class="swatch-badge" style="color:#285740; background:rgba(255,255,255,0.85);">Gästefertig</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Sauber (Salbeigrün Sanft)</div>
+            <div class="swatch-meta">
+              <span class="hex-code" onclick="copyHex('#edf6f1')">#edf6f1</span>
+              <span class="rgb-code">Text: #285740</span>
+            </div>
+            <div class="swatch-desc">Sanfter Salbeibadge: Zimmer ist gereinigt, Betten bezogen und freigegeben.</div>
+          </div>
+        </div>
+
+        <!-- Schmutzig Dirty -->
+        <div class="swatch-card">
+          <div class="swatch-bar" style="background: #fcf3e6; border-top: 3px solid #cf8232;">
+            <span class="swatch-badge" style="color:#8c5820; background:rgba(255,255,255,0.85);">Dirty</span>
+          </div>
+          <div class="swatch-info">
+            <div class="swatch-title">Dirty (Warmes Ocker Sanft)</div>
+            <div class="swatch-meta">
+              <span class="hex-code" onclick="copyHex('#fcf3e6')">#fcf3e6</span>
+              <span class="rgb-code">Text: #8c5820</span>
+            </div>
+            <div class="swatch-desc">Sanfter Sandsteinton: Zimmer nach Abreise oder Zwischenreinigung ausstehend.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <footer>
+      <div>Hotel Lindengarten • Software-Farbsystem v2.2 • Kurort Jonsdorf</div>
+      <div>Bereitgestellt für Geschäftsführung & Designabteilung</div>
+    </footer>
+  </div>
+
+  <div id="toast" class="copy-toast">Hex-Code in Zwischenablage kopiert!</div>
+
+  <script>
+    function copyHex(hex) {
+      navigator.clipboard.writeText(hex).then(() => {
+        const toast = document.getElementById('toast');
+        toast.textContent = hex + ' in Zwischenablage kopiert!';
+        toast.classList.add('visible');
+        setTimeout(() => toast.classList.remove('visible'), 2200);
+      });
+    }
+
+    function setPalette(mode) {
+      const btnMuted = document.getElementById('btnMuted');
+      const btnLoud = document.getElementById('btnLoud');
+      const statusText = document.getElementById('modeStatusText');
+
+      if (mode === 'loud') {
+        document.body.classList.add('loud-mode');
+        btnLoud.classList.add('active');
+        btnMuted.classList.remove('active');
+        statusText.innerHTML = 'Aktive Ansicht: <strong>Bisherige Knallfarben</strong> (Grell / Saturation 85–95%).';
+
+        // Update displayed Hex and RGB
+        document.getElementById('hex-res').textContent = '#f59e0b';
+        document.getElementById('rgb-res').textContent = 'RGB 245, 158, 11';
+        document.getElementById('hex-arr').textContent = '#059669';
+        document.getElementById('rgb-arr').textContent = 'RGB 5, 150, 105';
+        document.getElementById('hex-dep').textContent = '#94a3b8';
+        document.getElementById('rgb-dep').textContent = 'RGB 148, 163, 184';
+        document.getElementById('hex-grp').textContent = '#2563eb';
+        document.getElementById('rgb-grp').textContent = 'RGB 37, 99, 235';
+        document.getElementById('hex-weekend').textContent = '#f43f5e';
+        document.getElementById('rgb-weekend').textContent = 'RGB 244, 63, 94';
+        document.getElementById('hex-mauve').textContent = '#f5d0fe';
+        document.getElementById('rgb-mauve').textContent = 'Text: #4a044e';
+        document.getElementById('hex-paid').textContent = '#10b981';
+        document.getElementById('rgb-paid').textContent = 'RGB 16, 185, 129';
+        document.getElementById('hex-part').textContent = '#fbbf24';
+        document.getElementById('rgb-part').textContent = 'RGB 251, 191, 36';
+        document.getElementById('hex-open').textContent = '#e11d48';
+        document.getElementById('rgb-open').textContent = 'RGB 225, 29, 72';
+        document.getElementById('hex-header').textContent = '#1e293b';
+        document.getElementById('rgb-header').textContent = 'RGB 30, 41, 59';
+        document.getElementById('hex-actionbar').textContent = '#cbd5e1';
+        document.getElementById('rgb-actionbar').textContent = 'RGB 203, 213, 225';
+        document.getElementById('hex-purple').textContent = '#9333ea';
+        document.getElementById('rgb-purple').textContent = 'RGB 147, 51, 234';
+      } else {
+        document.body.classList.remove('loud-mode');
+        btnMuted.classList.add('active');
+        btnLoud.classList.remove('active');
+        statusText.innerHTML = 'Aktive Ansicht: <strong>Mattes Natur- & Sandstein-Farbschema</strong> (Augenschonend bei 8h Dauerbetrieb).';
+
+        // Update displayed Hex and RGB
+        document.getElementById('hex-res').textContent = '#cf8232';
+        document.getElementById('rgb-res').textContent = 'RGB 207, 130, 50';
+        document.getElementById('hex-arr').textContent = '#397356';
+        document.getElementById('rgb-arr').textContent = 'RGB 57, 115, 86';
+        document.getElementById('hex-dep').textContent = '#7f8c9b';
+        document.getElementById('rgb-dep').textContent = 'RGB 127, 140, 155';
+        document.getElementById('hex-grp').textContent = '#376189';
+        document.getElementById('rgb-grp').textContent = 'RGB 55, 97, 137';
+        document.getElementById('hex-weekend').textContent = '#b84d4d';
+        document.getElementById('rgb-weekend').textContent = 'RGB 184, 77, 77';
+        document.getElementById('hex-mauve').textContent = '#e5d0e2';
+        document.getElementById('rgb-mauve').textContent = 'Text: #502d4b';
+        document.getElementById('hex-paid').textContent = '#2ea36f';
+        document.getElementById('rgb-paid').textContent = 'RGB 46, 163, 111';
+        document.getElementById('hex-part').textContent = '#d4973b';
+        document.getElementById('rgb-part').textContent = 'RGB 212, 151, 59';
+        document.getElementById('hex-open').textContent = '#bd4343';
+        document.getElementById('rgb-open').textContent = 'RGB 189, 67, 67';
+        document.getElementById('hex-header').textContent = '#242c38';
+        document.getElementById('rgb-header').textContent = 'RGB 36, 44, 56';
+        document.getElementById('hex-actionbar').textContent = '#c5ccd6';
+        document.getElementById('rgb-actionbar').textContent = 'RGB 197, 204, 214';
+        document.getElementById('hex-purple').textContent = '#6d5684';
+        document.getElementById('rgb-purple').textContent = 'RGB 109, 86, 132';
+      }
+    }
+  </script>
+</body>
+</html>

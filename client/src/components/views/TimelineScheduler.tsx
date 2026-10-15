@@ -8,7 +8,7 @@ import {
   type DragEndEvent,
   type DragStartEvent
 } from '@dnd-kit/core';
-import type { Room, Reservation, Guest, PriceVariant } from '../../types';
+import type { Room, Reservation, Guest, PriceVariant, Invoice } from '../../types';
 import { 
   Calendar, ChevronLeft, ChevronRight, Lock, Unlock, 
   CheckCircle2, Clock, Plus, Sparkles, AlertTriangle, ShieldCheck,
@@ -23,6 +23,7 @@ interface TimelineSchedulerProps {
   reservations: Reservation[];
   guests: Guest[];
   priceVariants: PriceVariant[];
+  invoices?: Invoice[];
   onSaveReservation: (data: Partial<Reservation>) => Promise<any>;
   onDeleteReservation: (id: number) => Promise<void>;
   onUpdateRoom: (room: Room) => Promise<void>;
@@ -35,9 +36,12 @@ interface BookingBarProps {
   room: Room;
   totalDays: number;
   monthStart: Date;
+  nextMonthStart: Date;
   onSelect: (res: Reservation) => void;
   onDoubleClick: (res: Reservation) => void;
   isSelected: boolean;
+  invoice?: Invoice;
+  resInvoices?: Invoice[];
 }
 
 const BookingBar: React.FC<BookingBarProps> = ({
@@ -45,9 +49,12 @@ const BookingBar: React.FC<BookingBarProps> = ({
   room,
   totalDays,
   monthStart,
+  nextMonthStart,
   onSelect,
   onDoubleClick,
   isSelected,
+  invoice,
+  resInvoices = [],
 }) => {
   const isLocked = !!reservation.isLockedToRoom;
   const isArrived = !!reservation.isArrived && !reservation.isDeparted;
@@ -60,12 +67,32 @@ const BookingBar: React.FC<BookingBarProps> = ({
     disabled: isLocked,
   });
 
-  // Berechne Starttag und Dauer im angezeigten Monat
-  const resArrival = new Date(reservation.arrivalDate);
-  const resDeparture = new Date(reservation.departureDate);
+  // Sichere lokale Datumszerlegung YYYY-MM-DD
+  const parseLocalDate = (dateStr: string) => {
+    if (!dateStr) return new Date(NaN);
+    const parts = String(dateStr).split('T')[0].split('-').map(Number);
+    if (parts.length < 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+      return new Date(dateStr);
+    }
+    return new Date(parts[0], parts[1] - 1, parts[2], 0, 0, 0, 0);
+  };
 
-  const startDay = Math.max(1, Math.ceil((resArrival.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-  const endDay = Math.min(totalDays + 1, Math.ceil((resDeparture.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+  const arrDate = parseLocalDate(reservation.arrivalDate);
+  const depDate = parseLocalDate(reservation.departureDate);
+
+  if (isNaN(arrDate.getTime()) || isNaN(depDate.getTime())) {
+    return null;
+  }
+
+  // Liegt die Buchung außerhalb des angezeigten Monats?
+  if (depDate <= monthStart || arrDate >= nextMonthStart) {
+    return null;
+  }
+
+  // Starttag (1-basiert bezogen auf diesen Monat)
+  const startDay = arrDate < monthStart ? 1 : arrDate.getDate();
+  // Endtag (1-basiert bezogen auf diesen Monat, exklusiv für Abreisetag)
+  const endDay = depDate >= nextMonthStart ? totalDays + 1 : depDate.getDate();
   const daySpan = Math.max(1, endDay - startDay);
 
   // Positionierung im CSS Grid
@@ -79,14 +106,25 @@ const BookingBar: React.FC<BookingBarProps> = ({
   const guestName = reservation.guest?.lastName || reservation.last_name || 'Gast';
   const firstName = reservation.guest?.firstName || reservation.first_name || '';
 
-  // Farbe nach Status
-  let barBg = 'bg-amber-500 hover:bg-amber-600 text-slate-900 border-amber-600'; // Standard Reserviert (Orange wie Bild 01)
+  // Zahlungsstatus & Rechnungsbetrag für das Ampel-Modell (Grün = Bezahlt, Gelb = Teilbezahlt, Rot = Offen)
+  const allInvs = resInvoices.length > 0 ? resInvoices : (invoice ? [invoice] : []);
+  const hasInvs = allInvs.length > 0;
+  const isFullyPaid = hasInvs && allInvs.every((i) => i.isPaid);
+  const isPartiallyPaid = hasInvs && !isFullyPaid && allInvs.some((i) => i.isPaid);
+
+  const totalAmount = hasInvs
+    ? allInvs.reduce((sum, i) => sum + (Number(i.totalGross) || 0), 0)
+    : (reservation.totalPrice ?? (reservation.nights * (room.basePrice || 85)));
+  const paymentMethod = invoice?.paymentMethod || allInvs[0]?.paymentMethod || 'BAR';
+
+  // Farbe nach Status (Harmonisierte matte & ruhige Naturpalette)
+  let barBg = 'bg-[#cf8232] hover:bg-[#bd7428] text-slate-900 border-[#b06a1f]'; // Standard Reserviert (Mattes warmes Ocker)
   if (isArrived) {
-    barBg = 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700'; // Im Haus
+    barBg = 'bg-[#397356] hover:bg-[#306248] text-white border-[#27533c]'; // Im Haus (Mattes Salbeigrün)
   } else if (isDeparted) {
-    barBg = 'bg-slate-400 hover:bg-slate-500 text-white border-slate-500'; // Abgereist
+    barBg = 'bg-[#7f8c9b] hover:bg-[#6e7b8a] text-white border-[#616d7a]'; // Abgereist (Gedämpftes Schiefergrau)
   } else if (reservation.priceVariant === 'Pauschalangebot' || reservation.isFlatRate) {
-    barBg = 'bg-blue-600 hover:bg-blue-700 text-white border-blue-700'; // Pauschale/Gruppe
+    barBg = 'bg-[#376189] hover:bg-[#2e5275] text-white border-[#264563]'; // Pauschale/Gruppe (Nordisches Schieferblau)
   }
 
   return (
@@ -104,16 +142,22 @@ const BookingBar: React.FC<BookingBarProps> = ({
         onDoubleClick(reservation);
       }}
       className={`h-9 my-auto rounded shadow-xs border px-2 flex items-center justify-between text-xs font-sans font-bold z-10 transition-all cursor-pointer ${barBg} ${
-        isSelected ? 'ring-2 ring-blue-400 ring-offset-1 scale-[1.01]' : ''
+        isSelected ? 'ring-2 ring-[#5b8bb8] ring-offset-1 scale-[1.01]' : ''
       }`}
-      title={`${guestName}, ${firstName} | ${reservation.arrivalDate} bis ${reservation.departureDate} (${reservation.nights} Ü) | Zimmer: ${room.name} ${
-        isLocked ? '🔒 Fest gebucht (Drag-and-Drop gesperrt)' : '↔ Zum Verschieben auf ein anderes Zimmer ziehen'
+      title={`${guestName}, ${firstName} | ${reservation.arrivalDate} bis ${reservation.departureDate} (${reservation.nights} Ü) | Zimmer: ${room.name} | Zahlung: ${
+        isFullyPaid
+          ? 'BEZAHLT (Grüner Punkt)'
+          : isPartiallyPaid
+          ? 'TEILBEZAHLT (Gelber Punkt)'
+          : 'NICHT BEZAHLT (Roter Punkt)'
+      } ${
+        isLocked ? '| 🔒 Fest gebucht (Drag-and-Drop gesperrt)' : '| ↔ Zum Verschieben auf ein anderes Zimmer ziehen'
       }`}
     >
       <div className="flex items-center gap-1.5 truncate">
-        {/* Status-Buchstabe r (Magenta) aus Bild 01 */}
+        {/* Status-Buchstabe r (Mattes Mauve) aus Bild 01 */}
         {!isArrived && !isDeparted && (
-          <span className="font-mono font-black text-fuchsia-950 bg-fuchsia-200 px-1 py-0.5 rounded text-[10px] shrink-0" title="Reserviert">
+          <span className="font-mono font-black text-[#502d4b] bg-[#e5d0e2] px-1 py-0.5 rounded text-[10px] shrink-0" title="Reserviert">
             r
           </span>
         )}
@@ -122,7 +166,36 @@ const BookingBar: React.FC<BookingBarProps> = ({
         <span className="truncate text-xs font-bold leading-none">{guestName} ({reservation.nights}Ü)</span>
       </div>
 
-      <div className="flex items-center gap-1 shrink-0 ml-1.5">
+      <div className="flex items-center gap-1.5 shrink-0 ml-1.5">
+        {/* Ampel-Modell Zahlungsstatus: Grüner Punkt (Bezahlt) vs. Gelber Punkt (Teilbezahlt) vs. Roter Punkt (Nicht Bezahlt) */}
+        <span
+          className={`flex items-center justify-center shrink-0 transition-transform ${
+            daySpan >= 3 ? 'gap-1 bg-black/25 backdrop-blur-xs px-1.5 py-0.5 rounded-full border border-white/20' : ''
+          }`}
+          title={
+            isFullyPaid
+              ? `Rechnung BEZAHLT: ${totalAmount.toFixed(2)} € (${paymentMethod})`
+              : isPartiallyPaid
+              ? `Rechnung TEILBEZAHLT: ${allInvs.filter(i => i.isPaid).length} von ${allInvs.length} bezahlt (${totalAmount.toFixed(2)} €)`
+              : `Rechnung NICHT BEZAHLT: ${totalAmount.toFixed(2)} € offen`
+          }
+        >
+          <span
+            className={`w-2.5 h-2.5 rounded-full border border-white/90 shadow-xs shrink-0 ${
+              isFullyPaid
+                ? 'bg-[#2ea36f] ring-1 ring-[#268a5d] shadow-[#2ea36f]/40'
+                : isPartiallyPaid
+                ? 'bg-[#d4973b] ring-1 ring-[#bd822b] shadow-[#d4973b]/40 animate-pulse'
+                : 'bg-[#bd4343] ring-1 ring-[#a33737] shadow-[#bd4343]/40'
+            }`}
+          />
+          {daySpan >= 3 && (
+            <span className="text-[10px] font-bold text-white drop-shadow-xs leading-none hidden md:inline">
+              {isFullyPaid ? 'Bezahlt' : isPartiallyPaid ? 'Teilbezahlt' : 'Offen'}
+            </span>
+          )}
+        </span>
+
         {isLocked ? (
           <span title="Fest gebucht (Gesperrt)"><Lock className="w-3.5 h-3.5 text-amber-950/80" /></span>
         ) : (
@@ -165,8 +238,8 @@ const RoomRowDroppable: React.FC<RoomRowDroppableProps> = ({
         <div
           key={dayNum}
           onClick={() => onCellClick(room, dayNum)}
-          className={`border-r border-slate-200/60 h-full cursor-cell transition-colors hover:bg-blue-100/40 ${
-            isWeekend ? 'bg-rose-50/40' : ''
+          className={`border-r border-slate-200/60 h-full cursor-cell transition-colors hover:bg-[#376189]/15 ${
+            isWeekend ? 'bg-[#b84d4d]/10' : ''
           }`}
           title={`Zimmer ${room.name} am Tag ${dayNum} belegen`}
         />
@@ -193,6 +266,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
   reservations,
   guests,
   priceVariants,
+  invoices = [],
   onSaveReservation,
   onDeleteReservation,
   onUpdateRoom,
@@ -202,6 +276,27 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
   const [currentDate, setCurrentDate] = useState<Date>(new Date(2026, 9, 1)); // 0-indexed: 9 = Oktober
   const [selectedRes, setSelectedRes] = useState<Reservation | null>(reservations[0] || null);
   const [activeDragRes, setActiveDragRes] = useState<Reservation | null>(null);
+
+  // Schnelle O(1) Lookup-Map für ALLE Rechnungen je Reservierung (unterstützt Folio-Splits / Mehrfachrechnungen)
+  const invoicesByReservation = useMemo(() => {
+    const map = new Map<number, Invoice[]>();
+    (invoices || []).forEach((inv) => {
+      if (inv.reservationId) {
+        const list = map.get(inv.reservationId) || [];
+        list.push(inv);
+        map.set(inv.reservationId, list);
+      }
+    });
+    return map;
+  }, [invoices]);
+
+  const invoiceMap = useMemo(() => {
+    const map = new Map<number, Invoice>();
+    (invoices || []).forEach((inv) => {
+      if (inv.reservationId) map.set(inv.reservationId, inv);
+    });
+    return map;
+  }, [invoices]);
 
   // Dialog-Zustände
   const [isStatusOpen, setIsStatusOpen] = useState<boolean>(false);
@@ -240,7 +335,18 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
   const month = currentDate.getMonth();
   const monthName = currentDate.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' });
   const totalDaysInMonth = new Date(year, month + 1, 0).getDate();
-  const monthStart = new Date(year, month, 1);
+  const monthStart = new Date(year, month, 1, 0, 0, 0, 0);
+  const nextMonthStart = new Date(year, month + 1, 1, 0, 0, 0, 0);
+
+  // Sync selectedRes when reservations change
+  useEffect(() => {
+    if (!selectedRes && reservations.length > 0) {
+      setSelectedRes(reservations[0]);
+    } else if (selectedRes) {
+      const updated = reservations.find((r) => r.id === selectedRes.id);
+      if (updated) setSelectedRes(updated);
+    }
+  }, [reservations]);
 
   // Tage-Array mit Wochenende-Erkennung (Samstag / Sonntag = signalrot nach Bild 01)
   const days = useMemo(() => {
@@ -423,23 +529,32 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
             Oktober 2026 (Live)
           </button>
 
-          {/* Legende */}
+          {/* Legende mit matten & ruhigen Farbtönen */}
           <div className="hidden lg:flex items-center gap-3 text-[11px] text-slate-600 border-l border-slate-300 pl-3">
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-xs bg-amber-500 border border-amber-600 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#cf8232] border border-[#b06a1f] inline-block" />
               <span>Reserviert</span>
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-xs bg-emerald-600 border border-emerald-700 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#397356] border border-[#27533c] inline-block" />
               <span>Im Haus</span>
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-xs bg-rose-500 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-xs bg-[#b84d4d] inline-block" />
               <span>Wochenende (Sa/So)</span>
             </span>
             <span className="flex items-center gap-1">
-              <Lock className="w-3 h-3 text-amber-700" />
+              <Lock className="w-3 h-3 text-[#b06a1f]" />
               <span>Fest gebucht (gesperrt)</span>
+            </span>
+            {/* Ampel Legende Zahlungsstatus */}
+            <span className="flex items-center gap-1 border-l border-slate-300 pl-3" title="Ampelmodell Zahlungsstatus">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#2ea36f] border border-[#268a5d] shadow-xs inline-block" />
+              <span>Bezahlt</span>
+            </span>
+            <span className="flex items-center gap-1" title="Ampelmodell Zahlungsstatus">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#bd4343] border border-[#a33737] shadow-xs inline-block" />
+              <span>Nicht bezahlt</span>
             </span>
           </div>
         </div>
@@ -516,7 +631,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                 <div
                   key={dayNum}
                   className={`border-r border-slate-300 flex flex-col justify-center ${
-                    isWeekend ? 'bg-rose-500 text-white font-bold' : 'text-slate-700'
+                    isWeekend ? 'bg-[#b84d4d] text-white font-bold' : 'text-slate-700'
                   }`}
                 >
                   <span className="text-[9px] uppercase leading-none">{dayName}</span>
@@ -536,7 +651,9 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
             >
               {rooms.map((room) => {
                 // Finde alle Reservierungen dieses Zimmers
-                const roomReservations = reservations.filter((r) => r.roomId === room.id);
+                const roomReservations = reservations.filter(
+                  (r) => r.roomId === room.id || (r as any).room_id === room.id
+                );
 
                 return (
                   <RoomRowDroppable
@@ -545,22 +662,28 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                     days={days}
                     onCellClick={handleCellClick}
                   >
-                    {roomReservations.map((res) => (
-                      <BookingBar
-                        key={res.id}
-                        reservation={res}
-                        room={room}
-                        totalDays={totalDaysInMonth}
-                        monthStart={monthStart}
-                        isSelected={selectedRes?.id === res.id}
-                        onSelect={(r) => setSelectedRes(r)}
-                        onDoubleClick={(r) => {
-                          setSelectedRes(r);
-                          setNewResPreset(r);
-                          setIsEditOpen(true);
-                        }}
-                      />
-                    ))}
+                    {roomReservations.map((res) => {
+                      const resInvs = invoicesByReservation.get(res.id) || [];
+                      return (
+                        <BookingBar
+                          key={res.id}
+                          reservation={res}
+                          room={room}
+                          totalDays={totalDaysInMonth}
+                          monthStart={monthStart}
+                          nextMonthStart={nextMonthStart}
+                          isSelected={selectedRes?.id === res.id}
+                          invoice={resInvs[0] || invoiceMap.get(res.id)}
+                          resInvoices={resInvs}
+                          onSelect={(r) => setSelectedRes(r)}
+                          onDoubleClick={(r) => {
+                            setSelectedRes(r);
+                            setNewResPreset(r);
+                            setIsEditOpen(true);
+                          }}
+                        />
+                      );
+                    })}
                   </RoomRowDroppable>
                 );
               })}
@@ -573,7 +696,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
         {/* Drag Overlay Vorschau */}
         <DragOverlay>
           {activeDragRes ? (
-            <div className="h-9 bg-blue-600 text-white font-bold text-xs rounded px-2.5 flex items-center shadow-2xl opacity-90 border border-blue-400">
+            <div className="h-9 bg-[#376189] text-white font-bold text-xs rounded px-2.5 flex items-center shadow-2xl opacity-90 border border-[#4d7ea9]">
               <span>↔ {activeDragRes.guest?.lastName || activeDragRes.last_name} ({activeDragRes.nights}Ü)</span>
             </div>
           ) : null}
@@ -582,32 +705,76 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
 
       {/* 3. SCHNELLINFO-BAR UNTEN (wie in Bild 01 der ELAN hogatec Software) */}
       <div className="h-10 bg-slate-800 text-white px-3 flex items-center justify-between text-xs shrink-0 border-t border-slate-700 font-mono shadow-inner">
-        {selectedRes ? (
-          <div className="flex items-center gap-3 truncate">
-            <span className="bg-amber-500 text-slate-950 font-bold px-1.5 py-0.2 rounded text-[11px] font-sans">
-              Reser
-            </span>
-            <span className="text-slate-200">
-              Reservierung auf:{' '}
-              <strong className="text-white font-sans">
-                [{selectedRes.reservationNumber || '—'}] {selectedRes.guest?.lastName || selectedRes.last_name || 'Gast'}, {selectedRes.guest?.firstName || selectedRes.first_name || ''}
-              </strong>
-            </span>
-            <span className="text-slate-400">
-              ({selectedRes.nights || 1}Ü/{selectedRes.adultsCount || 1}P. (GPr.: {(Number(selectedRes.totalPrice) || 0).toFixed(2)} €) / Z:{selectedRes.room_code || rooms.find(r => r.id === selectedRes.roomId)?.roomCode || '?'})
-            </span>
-            {selectedRes.companionNames && (
-              <span className="text-amber-300 text-[11px] font-sans">
-                Mitreisende: {selectedRes.companionNames}
+        {selectedRes ? (() => {
+          const resInvs = invoicesByReservation.get(selectedRes.id) || [];
+          const hasInvs = resInvs.length > 0;
+          const isFullyPaid = hasInvs && resInvs.every((i) => i.isPaid);
+          const isPartiallyPaid = hasInvs && !isFullyPaid && resInvs.some((i) => i.isPaid);
+          const selectedAmount = hasInvs
+            ? resInvs.reduce((sum, i) => sum + (Number(i.totalGross) || 0), 0)
+            : (selectedRes.totalPrice ?? 0);
+          const paidCount = resInvs.filter((i) => i.isPaid).length;
+
+          return (
+            <div className="flex items-center gap-3 truncate">
+              <span className="bg-[#cf8232] text-slate-950 font-bold px-1.5 py-0.2 rounded text-[11px] font-sans">
+                Reser
               </span>
-            )}
-            {selectedRes.isLockedToRoom && (
-              <span className="flex items-center gap-1 text-amber-400 bg-amber-950/60 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold">
-                <Lock className="w-3 h-3" /> Fest gebucht (kein DnD-Umzug)
+              <span className="text-slate-200">
+                Reservierung auf:{' '}
+                <strong className="text-white font-sans">
+                  [{selectedRes.reservationNumber || '—'}] {selectedRes.guest?.lastName || selectedRes.last_name || 'Gast'}, {selectedRes.guest?.firstName || selectedRes.first_name || ''}
+                </strong>
               </span>
-            )}
-          </div>
-        ) : (
+              <span className="text-slate-400">
+                ({selectedRes.nights || 1}Ü/{selectedRes.adultsCount || 1}P. (GPr.: {(Number(selectedRes.totalPrice) || 0).toFixed(2)} €) / Z:{selectedRes.room_code || rooms.find(r => r.id === selectedRes.roomId)?.roomCode || '?'})
+              </span>
+              {selectedRes.companionNames && (
+                <span className="text-[#eed19a] text-[11px] font-sans">
+                  Mitreisende: {selectedRes.companionNames}
+                </span>
+              )}
+              {selectedRes.isLockedToRoom && (
+                <span className="flex items-center gap-1 text-[#e3b364] bg-[#3a1f06]/80 px-1.5 py-0.5 rounded text-[10px] font-sans font-bold">
+                  <Lock className="w-3 h-3" /> Fest gebucht (kein DnD-Umzug)
+                </span>
+              )}
+              {/* Ampel Zahlungsstatus */}
+              <span 
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-sans font-bold text-[11px] border ${
+                  isFullyPaid
+                    ? 'bg-[#1c3e2e]/90 text-[#86d4b1] border-[#2ea36f]/60'
+                    : isPartiallyPaid
+                    ? 'bg-[#3a1f06]/90 text-[#e3b364] border-[#d4973b]/70 ring-1 ring-[#d4973b]/40'
+                    : 'bg-[#381616]/90 text-[#df9696] border-[#bd4343]/60'
+                }`}
+                title={
+                  isFullyPaid
+                    ? 'Rechnungen sind vollständig bezahlt'
+                    : isPartiallyPaid
+                    ? `Teilbezahlt: ${paidCount} von ${resInvs.length} Rechnungen bezahlt`
+                    : 'Rechnung ist noch unbezahlt'
+                }
+              >
+                <span className={`w-2.5 h-2.5 rounded-full border border-white/60 shadow-xs ${
+                  isFullyPaid
+                    ? 'bg-emerald-400 ring-1 ring-emerald-500'
+                    : isPartiallyPaid
+                    ? 'bg-amber-400 ring-1 ring-amber-500 animate-pulse'
+                    : 'bg-rose-500 ring-1 ring-rose-600 animate-pulse'
+                }`} />
+                <span>
+                  {isFullyPaid
+                    ? 'Rechnung: BEZAHLT'
+                    : isPartiallyPaid
+                    ? `Rechnung: TEILBEZAHLT (${paidCount}/${resInvs.length})`
+                    : 'Rechnung: NICHT BEZAHLT'}
+                </span>
+                <span className="opacity-80 font-normal">({selectedAmount.toFixed(2)} €)</span>
+              </span>
+            </div>
+          );
+        })() : (
           <div className="text-slate-400 text-[11px] flex items-center gap-1.5">
             <Info className="w-3.5 h-3.5 text-blue-400" />
             <span>Klicken Sie auf eine Buchung für Detailinfos oder doppelt für Check-In / Status [F6]. Freie Zelle anklicken für Neuanlage.</span>
@@ -618,7 +785,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
           {selectedRes && (
             <button
               onClick={() => setIsStatusOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-2 py-0.5 rounded text-[11px] cursor-pointer"
+              className="bg-[#376189] hover:bg-[#2c4f70] text-white font-semibold px-2.5 py-0.5 rounded text-[11px] cursor-pointer shadow-xs transition-colors"
             >
               [F6] Status / Check-In
             </button>

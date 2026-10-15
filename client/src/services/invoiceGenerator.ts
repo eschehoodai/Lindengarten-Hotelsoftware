@@ -251,3 +251,141 @@ export function generateInvoiceFromReservation(
 
   return newInvoice;
 }
+
+/**
+ * Erstellt eine weitere Rechnung (Zweitrechnung / Folio B/C) für eine bestehende Reservierung.
+ */
+export function createAdditionalInvoice(
+  reservation: Reservation,
+  existingInvoicesForRes: Invoice[] = [],
+  guests: Guest[] = [],
+  rooms: Room[] = []
+): Invoice {
+  const guest = reservation.guest || guests.find((g) => g.id === reservation.guestId);
+  const room = reservation.room || rooms.find((r) => r.id === reservation.roomId);
+  const todayStr = new Date().toISOString().split('T')[0];
+  const nextSuffix = existingInvoicesForRes.length + 1;
+  const baseNumber = reservation.reservationNumber || String(reservation.id);
+  const invoiceNumber = `RE-${baseNumber}-${nextSuffix}`;
+
+  // Wenn auf der ersten Rechnung die Firma stand, standardmäßig auf Privatrechnung für den Gast wechseln
+  let salutation = 'Sehr geehrter Herr';
+  if (guest?.salutation) {
+    salutation = `${guest.salutation} ${guest.lastName || ''}`.trim();
+  } else if (guest?.titleCode === 2) {
+    salutation = `Sehr geehrte Frau ${guest?.lastName || ''}`.trim();
+  } else if (guest?.titleCode === 3) {
+    salutation = `Sehr geehrte Familie ${guest?.lastName || ''}`.trim();
+  }
+
+  const recipientName = guest ? `${guest.firstName || ''} ${guest.lastName || ''}`.trim() : 'Gast';
+  const recipientStreet = guest ? `${guest.street || ''} ${guest.houseNumber || ''}`.trim() : '';
+  const recipientZip = guest?.zipCode || '';
+  const recipientCity = guest?.city || '';
+  const recipientCountry = guest?.country || 'Deutschland';
+
+  const roomName = room?.name || reservation.room_name || `Zimmer ${reservation.roomId}`;
+  const roomCode = room?.roomCode || reservation.room_code || `${reservation.roomId}`;
+
+  const items: InvoiceLineItem[] = [];
+  const totals = recalculateInvoiceTotals(items);
+
+  const additionalInvoice: Invoice = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    invoiceNumber,
+    reservationId: reservation.id,
+    guestId: reservation.guestId,
+    invoiceDate: todayStr,
+    servicePeriodStart: reservation.arrivalDate,
+    servicePeriodEnd: reservation.departureDate,
+    nights: reservation.nights || 1,
+    recipientSalutation: salutation,
+    recipientName,
+    recipientCompany: '', // Auf Zweitrechnung primär private Anschrift
+    recipientStreet,
+    recipientZip,
+    recipientCity,
+    recipientCountry,
+    roomCode,
+    roomName,
+    billingDebitor: guest?.lastName || '',
+    items,
+    netLodging: totals.netLodging,
+    taxLodging: totals.taxLodging,
+    netService: totals.netService,
+    taxService: totals.taxService,
+    cityTaxAmount: totals.cityTaxAmount,
+    totalGross: totals.totalGross,
+    closingText: DEFAULT_CLOSING_TEXT,
+    paymentMethod: guest?.paymentMethod || 'BAR',
+    isPaid: false,
+    status: 'final',
+    tseTransactionId: `TSE-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+    guest,
+    reservation,
+  };
+
+  return additionalInvoice;
+}
+
+/**
+ * Erstellt eine freie Kassenrechnung (ohne Bindung an eine feste Zimmerreservierung).
+ */
+export function createFreeInvoice(presetGuest?: Guest | null): Invoice {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const uniqueNum = Math.floor(1000 + Math.random() * 9000);
+  const invoiceNumber = `RE-KASSE-${new Date().getFullYear()}-${uniqueNum}`;
+
+  const recipientSalutation = presetGuest?.salutation 
+    ? `${presetGuest.salutation} ${presetGuest.lastName || ''}`.trim() 
+    : 'Sehr geehrte Damen und Herren';
+  
+  const recipientName = presetGuest 
+    ? `${presetGuest.firstName || ''} ${presetGuest.lastName || ''}`.trim() 
+    : 'Barzahler / Kassenkunde';
+  
+  const recipientCompany = presetGuest?.name2 || '';
+  const recipientStreet = presetGuest ? `${presetGuest.street || ''} ${presetGuest.houseNumber || ''}`.trim() : '';
+  const recipientZip = presetGuest?.zipCode || '';
+  const recipientCity = presetGuest?.city || '';
+  const recipientCountry = presetGuest?.country || 'Deutschland';
+
+  const items: InvoiceLineItem[] = [];
+  const totals = recalculateInvoiceTotals(items);
+
+  const freeInvoice: Invoice = {
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    invoiceNumber,
+    reservationId: undefined,
+    guestId: presetGuest?.id || 0,
+    invoiceDate: todayStr,
+    servicePeriodStart: todayStr,
+    servicePeriodEnd: todayStr,
+    nights: 0,
+    recipientSalutation,
+    recipientName,
+    recipientCompany,
+    recipientStreet,
+    recipientZip,
+    recipientCity,
+    recipientCountry,
+    roomCode: 'KASSE',
+    roomName: 'Kasse / Thekenverkauf',
+    billingDebitor: recipientName,
+    items,
+    netLodging: totals.netLodging,
+    taxLodging: totals.taxLodging,
+    netService: totals.netService,
+    taxService: totals.taxService,
+    cityTaxAmount: totals.cityTaxAmount,
+    totalGross: totals.totalGross,
+    closingText: DEFAULT_CLOSING_TEXT,
+    paymentMethod: 'BAR',
+    isPaid: false,
+    status: 'final',
+    tseTransactionId: `TSE-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+    guest: presetGuest || undefined,
+  };
+
+  return freeInvoice;
+}

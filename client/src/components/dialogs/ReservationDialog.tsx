@@ -220,7 +220,7 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
           <div className="bg-white p-3 rounded border border-slate-200 shadow-xs grid grid-cols-3 gap-3">
             <div className="flex flex-col gap-1 col-span-2">
               <label className="text-[10px] text-slate-500 uppercase font-semibold flex items-center gap-1">
-                <Users className="w-3 h-3 text-blue-600" />
+                <Users className="w-3 h-3 text-[#376189]" />
                 <span>Hauptgast / Reserviert auf *</span>
               </label>
               <select
@@ -251,13 +251,13 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
 
             <div className="flex flex-col gap-1 col-span-2">
               <label className="text-[10px] text-slate-500 uppercase font-semibold flex items-center gap-1">
-                <DoorClosed className="w-3 h-3 text-blue-600" />
+                <DoorClosed className="w-3 h-3 text-[#376189]" />
                 <span>Zimmerauswahl (Hotel Lindengarten) *</span>
               </label>
               <select
                 value={formData.roomId || ''}
                 onChange={(e) => handleRoomChange(Number(e.target.value))}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-blue-900"
+                className="bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-xs font-bold text-[#1b2b3d]"
               >
                 {rooms.map((r) => (
                   <option key={r.id} value={r.id}>
@@ -670,7 +670,7 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
                 type="checkbox"
                 checked={!!formData.isWrittenReservation}
                 onChange={(e) => setFormData({ ...formData, isWrittenReservation: e.target.checked })}
-                className="w-4 h-4 text-blue-600 rounded"
+                className="w-4 h-4 text-[#376189] rounded focus:ring-[#376189]"
               />
               <span className="text-xs font-semibold text-slate-800">
                 Schriftlich reserviert (Bestätigung versendet)
@@ -678,18 +678,18 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
             </label>
 
             <label className={`flex items-center gap-2 cursor-pointer p-1.5 rounded border transition-colors ${
-              formData.isLockedToRoom ? 'bg-amber-50 border-amber-300' : 'border-slate-200'
+              formData.isLockedToRoom ? 'bg-[#fcf3e6] border-[#e2a862]' : 'border-slate-200'
             }`}>
               <input
                 type="checkbox"
                 checked={!!formData.isLockedToRoom}
                 onChange={(e) => setFormData({ ...formData, isLockedToRoom: e.target.checked })}
-                className="w-4 h-4 text-amber-600 rounded"
+                className="w-4 h-4 text-[#cf8232] rounded focus:ring-[#cf8232]"
               />
               <span className="text-xs font-bold text-slate-800 flex items-center gap-1">
                 {formData.isLockedToRoom ? (
                   <>
-                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <Lock className="w-3.5 h-3.5 text-[#cf8232]" />
                     <span>Fest gebucht (Gesperrt gegen DnD-Umzug)</span>
                   </>
                 ) : (
@@ -729,7 +729,7 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
             <button
               type="submit"
               disabled={isSaving}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white border border-blue-700 px-4 py-1.2 rounded font-semibold text-xs shadow-xs cursor-pointer active:translate-y-px"
+              className="flex items-center gap-1.5 bg-[#376189] hover:bg-[#2c4f70] text-white border border-[#264563] px-4 py-1.2 rounded font-semibold text-xs shadow-xs cursor-pointer active:translate-y-px"
             >
               <Check className="w-3.5 h-3.5" />
               <span>{isSaving ? 'Wird gespeichert...' : '[F9] Reservierung speichern'}</span>

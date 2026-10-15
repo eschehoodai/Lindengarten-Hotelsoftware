@@ -40,11 +40,11 @@ export const Header: React.FC<HeaderProps> = ({
   }, []);
 
   return (
-    <header className="flex items-center justify-between px-3 py-1 bg-slate-800 text-white border-b border-slate-700 shadow-sm shrink-0 select-none">
+    <header className="flex items-center justify-between px-3 py-1 bg-[#242c38] text-white border-b border-[#384252] shadow-sm shrink-0 select-none">
       {/* Links: Logo & Name */}
       <div className="flex items-center gap-2.5">
-        <div className="flex items-center gap-1.5 bg-emerald-600/30 border border-emerald-500/50 px-2 py-0.5 rounded text-xs font-semibold text-emerald-300">
-          <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+        <div className="flex items-center gap-1.5 bg-[#397356]/30 border border-[#48bc89]/40 px-2 py-0.5 rounded text-xs font-semibold text-[#86d4b1]">
+          <Building2 className="w-3.5 h-3.5 text-[#48bc89]" />
           <span>Hotel Lindengarten</span>
         </div>
         <span className="text-[11px] text-slate-400 font-mono hidden xl:inline">
@@ -58,8 +58,8 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onTabChange('timeline')}
           className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded transition-all cursor-pointer ${
             activeTab === 'timeline'
-              ? 'bg-blue-600 text-white shadow-xs font-semibold'
-              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              ? 'bg-[#376189] text-white shadow-xs font-semibold'
+              : 'text-slate-300 hover:bg-[#384252] hover:text-white'
           }`}
           title="Zimmerbelegungsplan (F1)"
         >
@@ -71,8 +71,8 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onTabChange('guests')}
           className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded transition-all cursor-pointer ${
             activeTab === 'guests'
-              ? 'bg-blue-600 text-white shadow-xs font-semibold'
-              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              ? 'bg-[#376189] text-white shadow-xs font-semibold'
+              : 'text-slate-300 hover:bg-[#384252] hover:text-white'
           }`}
           title="Gästestamm & Adressen (F2)"
         >
@@ -84,8 +84,8 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onTabChange('rooms')}
           className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded transition-all cursor-pointer ${
             activeTab === 'rooms'
-              ? 'bg-blue-600 text-white shadow-xs font-semibold'
-              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              ? 'bg-[#376189] text-white shadow-xs font-semibold'
+              : 'text-slate-300 hover:bg-[#384252] hover:text-white'
           }`}
           title="Zimmerstamm & Housekeeping (F3)"
         >
@@ -97,8 +97,8 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onTabChange('invoices')}
           className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded transition-all cursor-pointer ${
             activeTab === 'invoices'
-              ? 'bg-blue-600 text-white shadow-xs font-semibold'
-              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              ? 'bg-[#376189] text-white shadow-xs font-semibold'
+              : 'text-slate-300 hover:bg-[#384252] hover:text-white'
           }`}
           title="Kasse, Buchungsrechnungen & PDF (F4)"
         >
@@ -110,8 +110,8 @@ export const Header: React.FC<HeaderProps> = ({
           onClick={() => onTabChange('settings')}
           className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded transition-all cursor-pointer ${
             activeTab === 'settings'
-              ? 'bg-blue-600 text-white shadow-xs font-semibold'
-              : 'text-slate-300 hover:bg-slate-700 hover:text-white'
+              ? 'bg-[#376189] text-white shadow-xs font-semibold'
+              : 'text-slate-300 hover:bg-[#384252] hover:text-white'
           }`}
           title="Stammdaten & Preise (F5)"
         >
@@ -124,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-3 text-xs">
         {/* Benutzer CHEF */}
         <div className="hidden md:flex items-center gap-1 text-slate-300 bg-slate-700/50 px-2 py-0.5 rounded text-[11px]">
-          <User className="w-3 h-3 text-amber-400" />
+          <User className="w-3 h-3 text-[#d4973b]" />
           <span>Angemeldet: <strong>CHEF</strong></span>
         </div>
 
@@ -137,7 +137,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-1.5 bg-slate-900/70 px-2 py-0.5 rounded border border-slate-700">
           <span
             className={`w-2 h-2 rounded-full ${
-              serverStatus === 'online' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-500'
+              serverStatus === 'online' ? 'bg-[#2ea36f] animate-pulse' : 'bg-[#bd4343]'
             }`}
           />
           <span className="text-[11px] text-slate-300">

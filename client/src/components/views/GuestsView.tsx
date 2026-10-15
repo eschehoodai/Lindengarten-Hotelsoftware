@@ -249,13 +249,13 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
             )}
           </div>
 
-          {/* Filter-Buttons */}
+          {/* Filter-Buttons (Matte Palette) */}
           <div className="flex items-center gap-1">
             <button
               onClick={() => setFilterMode('ALL')}
               className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 filterMode === 'ALL'
-                  ? 'bg-blue-600 text-white font-semibold'
+                  ? 'bg-[#376189] text-white font-semibold'
                   : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
               }`}
             >
@@ -265,22 +265,22 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               onClick={() => setFilterMode('REGULAR')}
               className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 filterMode === 'REGULAR'
-                  ? 'bg-amber-600 text-white font-semibold'
+                  ? 'bg-[#cf8232] text-white font-semibold'
                   : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
               }`}
             >
-              <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+              <Star className="w-3 h-3 text-[#cf8232] fill-[#cf8232]" />
               <span>Stammgäste</span>
             </button>
             <button
               onClick={() => setFilterMode('TAX_EXEMPT')}
               className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                 filterMode === 'TAX_EXEMPT'
-                  ? 'bg-emerald-600 text-white font-semibold'
+                  ? 'bg-[#397356] text-white font-semibold'
                   : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
               }`}
             >
-              <ShieldAlert className="w-3 h-3 text-emerald-500" />
+              <ShieldAlert className="w-3 h-3 text-[#397356]" />
               <span>Gästetaxe Befreit</span>
             </button>
           </div>
@@ -337,7 +337,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
                     }}
                     className={`cursor-pointer transition-colors ${
                       isSelected
-                        ? 'bg-blue-600 text-white font-semibold'
+                        ? 'bg-[#376189] text-white font-semibold'
                         : 'hover:bg-slate-100 text-slate-800'
                     }`}
                   >
@@ -356,9 +356,9 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
                     <td className="py-1 px-3 border-r border-slate-200/50 text-center font-sans">
                       {guest.isRegularGuest ? (
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          isSelected ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-800'
+                          isSelected ? 'bg-white/20 text-white' : 'bg-[#fcf3e6] text-[#8c5820]'
                         }`}>
-                          <Star className="w-2.5 h-2.5 fill-current" />
+                          <Star className="w-2.5 h-2.5 fill-current text-[#cf8232]" />
                           <span>Ja</span>
                         </span>
                       ) : (
@@ -368,7 +368,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
                     <td className="py-1 px-3 text-center font-sans">
                       {guest.isTaxExempt ? (
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          isSelected ? 'bg-emerald-400 text-slate-900' : 'bg-emerald-100 text-emerald-800'
+                          isSelected ? 'bg-white/20 text-white' : 'bg-[#edf6f1] text-[#285740]'
                         }`}>
                           Befreit
                         </span>
@@ -389,16 +389,16 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
         <div className="flex items-center justify-between border-b border-slate-200 pb-1 mb-2">
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
-              <Users className="w-4 h-4 text-blue-600" />
+              <Users className="w-4 h-4 text-[#376189]" />
               <span>Gästestamm-Detailmaske (Meldeschein & Adresse):</span>
-              <strong className="text-blue-700">
+              <strong className="text-[#376189]">
                 {formData.firstName || formData.lastName
                   ? `${formData.salutation || ''} ${formData.firstName || ''} ${formData.lastName || ''}`.trim()
                   : 'Neuer Gast'}
               </strong>
             </span>
             {isEditing && (
-              <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase animate-pulse">
+              <span className="bg-[#397356] text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase animate-pulse">
                 {isNew ? 'Neuanlage' : 'Bearbeitungsmodus'}
               </span>
             )}

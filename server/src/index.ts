@@ -153,6 +153,67 @@ app.delete('/api/guests/:id', async (req, res) => {
   res.json({ success: true });
 });
 
+function extractReservationData(body: any) {
+  const data: any = {};
+  if (body.reservationNumber !== undefined || body.reservation_number !== undefined)
+    data.reservationNumber = String(body.reservationNumber ?? body.reservation_number);
+  if (body.guestId !== undefined || body.guest_id !== undefined)
+    data.guestId = Number(body.guestId ?? body.guest_id);
+  if (body.roomId !== undefined || body.room_id !== undefined)
+    data.roomId = Number(body.roomId ?? body.room_id);
+  if (body.arrivalDate !== undefined || body.arrival_date !== undefined)
+    data.arrivalDate = String(body.arrivalDate ?? body.arrival_date);
+  if (body.departureDate !== undefined || body.departure_date !== undefined)
+    data.departureDate = String(body.departureDate ?? body.departure_date);
+  if (body.nights !== undefined) data.nights = Number(body.nights);
+  if (body.adultsCount !== undefined || body.adults_count !== undefined)
+    data.adultsCount = Number(body.adultsCount ?? body.adults_count);
+  if (body.childrenCount !== undefined || body.children_count !== undefined)
+    data.childrenCount = Number(body.childrenCount ?? body.children_count);
+  if (body.companionNames !== undefined || body.companion_names !== undefined)
+    data.companionNames = body.companionNames ?? body.companion_names ?? '';
+  if (body.isArrived !== undefined || body.is_arrived !== undefined)
+    data.isArrived = Boolean(body.isArrived ?? body.is_arrived);
+  if (body.isDeparted !== undefined || body.is_departed !== undefined)
+    data.isDeparted = Boolean(body.isDeparted ?? body.is_departed);
+  if (body.isWrittenReservation !== undefined || body.is_written_reservation !== undefined)
+    data.isWrittenReservation = Boolean(body.isWrittenReservation ?? body.is_written_reservation);
+  if (body.isLockedToRoom !== undefined || body.is_locked_to_room !== undefined)
+    data.isLockedToRoom = Boolean(body.isLockedToRoom ?? body.is_locked_to_room);
+  if (body.priceVariant !== undefined || body.price_variant !== undefined)
+    data.priceVariant = body.priceVariant ?? body.price_variant;
+  if (body.pricePerNight !== undefined || body.price_per_night !== undefined)
+    data.pricePerNight = Number(body.pricePerNight ?? body.price_per_night);
+  if (body.totalPrice !== undefined || body.total_price !== undefined)
+    data.totalPrice = Number(body.totalPrice ?? body.total_price);
+  if (body.isFlatRate !== undefined || body.is_flat_rate !== undefined)
+    data.isFlatRate = Boolean(body.isFlatRate ?? body.is_flat_rate);
+  if (body.boardType !== undefined || body.board_type !== undefined)
+    data.boardType = body.boardType ?? body.board_type;
+  if (body.hasBreakfast !== undefined || body.has_breakfast !== undefined)
+    data.hasBreakfast = Boolean(body.hasBreakfast ?? body.has_breakfast);
+  if (body.breakfastCount !== undefined || body.breakfast_count !== undefined)
+    data.breakfastCount = Number(body.breakfastCount ?? body.breakfast_count);
+  if (body.ohpCount !== undefined || body.ohp_count !== undefined)
+    data.ohpCount = Number(body.ohpCount ?? body.ohp_count);
+  if (body.twoGangCount !== undefined || body.two_gang_count !== undefined)
+    data.twoGangCount = Number(body.twoGangCount ?? body.two_gang_count);
+  if (body.threeGangCount !== undefined || body.three_gang_count !== undefined)
+    data.threeGangCount = Number(body.threeGangCount ?? body.three_gang_count);
+  if (body.lunchCount !== undefined || body.lunch_count !== undefined)
+    data.lunchCount = Number(body.lunchCount ?? body.lunch_count);
+  if (body.coffeeTeaCount !== undefined || body.coffee_tea_count !== undefined)
+    data.coffeeTeaCount = Number(body.coffeeTeaCount ?? body.coffee_tea_count);
+  if (body.dinnerCount !== undefined || body.dinner_count !== undefined)
+    data.dinnerCount = Number(body.dinnerCount ?? body.dinner_count);
+  if (body.dailyArrangement !== undefined || body.daily_arrangement !== undefined)
+    data.dailyArrangement = body.dailyArrangement ?? body.daily_arrangement;
+  if (body.billingDebitor !== undefined || body.billing_debitor !== undefined)
+    data.billingDebitor = body.billingDebitor ?? body.billing_debitor;
+  if (body.notes !== undefined) data.notes = body.notes;
+  return data;
+}
+
 // 3. Reservierungen (Timeline Daten)
 app.get('/api/reservations', async (req, res) => {
   try {
@@ -168,6 +229,7 @@ app.get('/api/reservations', async (req, res) => {
       }
     }
   } catch (err: any) {
+    console.warn('Drizzle query failed for reservations:', err.message);
     try {
       if (client) {
         const fallback = await client.execute(`
@@ -177,7 +239,53 @@ app.get('/api/reservations', async (req, res) => {
           JOIN rooms rm ON r.room_id = rm.id;
         `);
         if (fallback.rows && fallback.rows.length > 0) {
-          return res.json(fallback.rows);
+          const mapped = fallback.rows.map((row: any) => ({
+            id: Number(row.id),
+            reservationNumber: String(row.reservation_number || ''),
+            guestId: Number(row.guest_id),
+            roomId: Number(row.room_id),
+            arrivalDate: String(row.arrival_date || ''),
+            departureDate: String(row.departure_date || ''),
+            nights: Number(row.nights) || 1,
+            adultsCount: Number(row.adults_count) || 1,
+            childrenCount: Number(row.children_count) || 0,
+            companionNames: row.companion_names || '',
+            isArrived: Boolean(row.is_arrived),
+            isDeparted: Boolean(row.is_departed),
+            isWrittenReservation: Boolean(row.is_written_reservation),
+            isLockedToRoom: Boolean(row.is_locked_to_room),
+            priceVariant: row.price_variant || 'Doppelt belegt',
+            pricePerNight: Number(row.price_per_night) || 85,
+            totalPrice: Number(row.total_price) || 85,
+            isFlatRate: Boolean(row.is_flat_rate),
+            boardType: row.board_type || 'Frühstück',
+            hasBreakfast: Boolean(row.has_breakfast),
+            breakfastCount: Number(row.breakfast_count) || 1,
+            ohpCount: Number(row.ohp_count) || 0,
+            twoGangCount: Number(row.two_gang_count) || 0,
+            threeGangCount: Number(row.three_gang_count) || 0,
+            dailyArrangement: row.daily_arrangement || '',
+            billingDebitor: row.billing_debitor || '',
+            notes: row.notes || '',
+            createdAt: row.created_at || new Date().toISOString(),
+            last_name: row.last_name,
+            first_name: row.first_name,
+            search_name: row.search_name,
+            room_code: row.room_code,
+            room_name: row.room_name,
+            guest: {
+              id: Number(row.guest_id),
+              lastName: row.last_name || '',
+              firstName: row.first_name || '',
+              searchName: row.search_name || '',
+            },
+            room: {
+              id: Number(row.room_id),
+              roomCode: row.room_code || '',
+              name: row.room_name || '',
+            }
+          }));
+          return res.json(mapped);
         }
       }
     } catch (e: any) {
@@ -188,10 +296,11 @@ app.get('/api/reservations', async (req, res) => {
 });
 
 app.post('/api/reservations', async (req, res) => {
+  const cleanData = extractReservationData(req.body);
   try {
     if (db) {
       const newRes = await db.insert(schema.reservations).values({
-        ...req.body,
+        ...cleanData,
         createdAt: new Date().toISOString()
       }).returning();
       if (newRes && newRes[0]) {
@@ -202,7 +311,7 @@ app.post('/api/reservations', async (req, res) => {
     console.warn('DB insert failed for reservation:', err.message);
   }
   const fallbackRes = {
-    ...req.body,
+    ...cleanData,
     id: memoryReservations.length + 1,
     createdAt: new Date().toISOString()
   };
@@ -212,10 +321,11 @@ app.post('/api/reservations', async (req, res) => {
 
 app.put('/api/reservations/:id', async (req, res) => {
   const { id } = req.params;
+  const cleanData = extractReservationData(req.body);
   try {
     if (db) {
       await db.update(schema.reservations)
-        .set(req.body)
+        .set(cleanData)
         .where(eq(schema.reservations.id, Number(id)));
     }
   } catch (err: any) {
@@ -223,7 +333,7 @@ app.put('/api/reservations/:id', async (req, res) => {
   }
   const idx = memoryReservations.findIndex((x: any) => x.id === Number(id));
   if (idx !== -1) {
-    memoryReservations[idx] = { ...memoryReservations[idx], ...req.body };
+    memoryReservations[idx] = { ...memoryReservations[idx], ...cleanData };
   }
   res.json({ success: true });
 });

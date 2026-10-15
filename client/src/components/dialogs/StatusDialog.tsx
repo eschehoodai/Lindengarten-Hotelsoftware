@@ -111,7 +111,7 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
           {/* STATUS-PANEL (CHECK-IN / CHECK-OUT) */}
           <div className="bg-white p-3 rounded border border-slate-200 shadow-xs flex flex-col gap-2.5">
             <span className="font-bold text-slate-700 uppercase tracking-wider text-[11px] border-b border-slate-100 pb-1 flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5 text-blue-600" />
+              <Clock className="w-3.5 h-3.5 text-[#376189]" />
               <span>Anreise- & Abreisestatus (Check-In)</span>
             </span>
 
@@ -126,16 +126,16 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
                 }}
                 className={`flex items-center justify-between p-2 rounded border text-xs font-semibold cursor-pointer transition-all ${
                   isArrived
-                    ? 'bg-emerald-50 border-emerald-500 text-emerald-800 ring-1 ring-emerald-500'
+                    ? 'bg-[#edf6f1] border-[#397356] text-[#285740] ring-1 ring-[#397356]'
                     : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className={`w-4 h-4 ${isArrived ? 'text-emerald-600' : 'text-slate-400'}`} />
+                  <CheckCircle2 className={`w-4 h-4 ${isArrived ? 'text-[#397356]' : 'text-slate-400'}`} />
                   <span>Check-In (Eingecheckt)</span>
                 </div>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
-                  isArrived ? 'bg-emerald-200 text-emerald-900' : 'bg-slate-200 text-slate-600'
+                  isArrived ? 'bg-[#d2e7dc] text-[#1e4432]' : 'bg-slate-200 text-slate-600'
                 }`}>
                   {isArrived ? 'JA (Im Haus)' : 'NEIN'}
                 </span>
@@ -151,16 +151,16 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
                 }}
                 className={`flex items-center justify-between p-2 rounded border text-xs font-semibold cursor-pointer transition-all ${
                   isDeparted
-                    ? 'bg-blue-50 border-blue-500 text-blue-800 ring-1 ring-blue-500'
+                    ? 'bg-[#f0f3f6] border-[#7f8c9b] text-[#334155] ring-1 ring-[#7f8c9b]'
                     : 'bg-slate-50 border-slate-300 text-slate-700 hover:bg-slate-100'
                 }`}
               >
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className={`w-4 h-4 ${isDeparted ? 'text-blue-600' : 'text-slate-400'}`} />
+                  <CheckCircle2 className={`w-4 h-4 ${isDeparted ? 'text-[#616d7a]' : 'text-slate-400'}`} />
                   <span>Check-Out (Abgereist)</span>
                 </div>
                 <span className={`text-[10px] px-1.5 py-0.2 rounded font-bold ${
-                  isDeparted ? 'bg-blue-200 text-blue-900' : 'bg-slate-200 text-slate-600'
+                  isDeparted ? 'bg-[#dbe2e9] text-[#242c38]' : 'bg-slate-200 text-slate-600'
                 }`}>
                   {isDeparted ? 'JA (Abgereist)' : 'NEIN'}
                 </span>
@@ -181,7 +181,7 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
                   type="checkbox"
                   checked={isWrittenReservation}
                   onChange={(e) => setIsWrittenReservation(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded"
+                  className="w-4 h-4 text-[#376189] rounded focus:ring-[#376189]"
                 />
                 <div className="flex flex-col">
                   <span className="font-semibold text-slate-800">Schriftlich reserviert</span>
@@ -238,7 +238,7 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white border border-blue-700 px-4 py-1 rounded font-semibold text-xs shadow-xs cursor-pointer active:translate-y-px"
+            className="flex items-center gap-1.5 bg-[#376189] hover:bg-[#2c4f70] text-white border border-[#264563] px-4 py-1 rounded font-semibold text-xs shadow-xs cursor-pointer active:translate-y-px"
           >
             <Check className="w-3.5 h-3.5" />
             <span>{isSaving ? 'Wird gespeichert...' : 'Status speichern [F9/Enter]'}</span>

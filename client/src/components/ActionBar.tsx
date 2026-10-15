@@ -35,7 +35,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
   editLabel = '[F9] Ändern',
 }) => {
   return (
-    <footer className="bg-slate-300 border-t border-slate-400 px-3 py-1.5 flex items-center justify-between shrink-0 shadow-inner select-none">
+    <footer className="bg-[#c5ccd6] border-t border-[#7f8c9b] px-3 py-1.5 flex items-center justify-between shrink-0 shadow-inner select-none">
       <div className="flex items-center gap-1.5">
         {/* F6: Wählen */}
         <button
@@ -48,7 +48,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
           }`}
           title="Auswählen (F6)"
         >
-          <Check className="w-3.5 h-3.5 text-emerald-600" />
+          <Check className="w-3.5 h-3.5 text-[#2ea36f]" />
           <span>{selectLabel}</span>
         </button>
 
@@ -63,7 +63,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
           }`}
           title="Neu anlegen (F7)"
         >
-          <Plus className="w-3.5 h-3.5 text-emerald-600" />
+          <Plus className="w-3.5 h-3.5 text-[#2ea36f]" />
           <span>[F7] Neu / Einfügen</span>
         </button>
 
@@ -79,7 +79,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
             }`}
             title="Datensatz duplizieren (F8)"
           >
-            <Copy className="w-3.5 h-3.5 text-blue-600" />
+            <Copy className="w-3.5 h-3.5 text-[#376189]" />
             <span>[F8] Kopieren</span>
           </button>
         )}
@@ -90,7 +90,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
           disabled={!canEdit}
           className={`flex items-center gap-1.5 border rounded px-3 py-1.2 text-xs font-semibold shadow-xs active:translate-y-px transition-all ${
             isEditing
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-700 cursor-pointer animate-pulse'
+              ? 'bg-[#397356] hover:bg-[#306248] text-white border-[#27533c] cursor-pointer animate-pulse'
               : canEdit
               ? 'bg-white hover:bg-slate-100 text-slate-800 border-slate-400 cursor-pointer'
               : 'bg-slate-200 text-slate-400 border-slate-300 cursor-not-allowed'
@@ -104,7 +104,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
             </>
           ) : (
             <>
-              <Edit className="w-3.5 h-3.5 text-purple-600" />
+              <Edit className="w-3.5 h-3.5 text-[#6d5684]" />
               <span>{editLabel}</span>
             </>
           )}
@@ -122,7 +122,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
             }`}
             title="Löschen / Stornieren (Entf)"
           >
-            <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+            <Trash2 className="w-3.5 h-3.5 text-[#bd4343]" />
             <span>[Entf] Löschen</span>
           </button>
         )}
@@ -132,17 +132,17 @@ export const ActionBar: React.FC<ActionBarProps> = ({
         {/* Esc: Abbrechen oder Beenden */}
         <button
           onClick={onClose}
-          className="flex items-center gap-1.5 bg-slate-700 hover:bg-slate-800 text-white border border-slate-800 rounded px-3 py-1.2 text-xs font-semibold shadow-xs active:translate-y-px transition-all cursor-pointer"
+          className="flex items-center gap-1.5 bg-[#242c38] hover:bg-[#18202c] text-white border border-[#18202c] rounded px-3 py-1.2 text-xs font-semibold shadow-xs active:translate-y-px transition-all cursor-pointer"
           title={isEditing ? 'Abbrechen (Esc)' : 'Schließen / Beenden (Esc)'}
         >
           {isEditing ? (
             <>
-              <X className="w-3.5 h-3.5 text-rose-400" />
+              <X className="w-3.5 h-3.5 text-[#df9696]" />
               <span>[Esc] Abbrechen</span>
             </>
           ) : (
             <>
-              <Power className="w-3.5 h-3.5 text-amber-400" />
+              <Power className="w-3.5 h-3.5 text-[#d4973b]" />
               <span>[Esc] Beenden</span>
             </>
           )}

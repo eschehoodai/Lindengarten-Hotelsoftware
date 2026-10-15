@@ -83,7 +83,7 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
                 onClick={() => setFilterCategory(cat)}
                 className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                   filterCategory === cat
-                    ? 'bg-blue-600 text-white font-semibold'
+                    ? 'bg-[#376189] text-white font-semibold'
                     : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
                 }`}
               >
@@ -130,7 +130,7 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
                   onDoubleClick={handleToggleCleaning}
                   className={`cursor-pointer transition-colors ${
                     isSelected
-                      ? 'bg-blue-600 text-white font-semibold'
+                      ? 'bg-[#376189] text-white font-semibold'
                       : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
@@ -145,18 +145,18 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
                         isSelected
                           ? 'bg-white/20 text-white'
                           : isDirty
-                          ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                          : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                          ? 'bg-[#fcf3e6] text-[#8c5820] border border-[#eed19a]'
+                          : 'bg-[#edf6f1] text-[#285740] border border-[#b7dec9]'
                       }`}
                     >
                       {isDirty ? (
                         <>
-                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <AlertTriangle className="w-3 h-3 text-[#cf8232]" />
                           <span>Dirty (Reinigung)</span>
                         </>
                       ) : (
                         <>
-                          <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                          <ShieldCheck className="w-3 h-3 text-[#397356]" />
                           <span>Sauber (Gästefertig)</span>
                         </>
                       )}

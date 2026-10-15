@@ -25,6 +25,74 @@ import {
   LayoutGrid, Table as TableIcon
 } from 'lucide-react';
 
+export function sanitizeReservation(r: any): Reservation {
+  const roomId = Number(r.roomId ?? r.room_id) || 0;
+  const guestId = Number(r.guestId ?? r.guest_id) || 0;
+  const nights = Number(r.nights) || 1;
+  const pricePerNight = Number(r.pricePerNight ?? r.price_per_night) || 85;
+  const totalPrice = Number(r.totalPrice ?? r.total_price) || (nights * pricePerNight);
+
+  return {
+    ...r,
+    id: Number(r.id),
+    reservationNumber: String(r.reservationNumber ?? r.reservation_number ?? ''),
+    guestId,
+    roomId,
+    arrivalDate: String(r.arrivalDate ?? r.arrival_date ?? ''),
+    departureDate: String(r.departureDate ?? r.departure_date ?? ''),
+    nights,
+    adultsCount: Number(r.adultsCount ?? r.adults_count) || 1,
+    childrenCount: Number(r.childrenCount ?? r.children_count) || 0,
+    companionNames: r.companionNames ?? r.companion_names ?? '',
+    isArrived: Boolean(r.isArrived ?? r.is_arrived),
+    isDeparted: Boolean(r.isDeparted ?? r.is_departed),
+    isWrittenReservation: r.isWrittenReservation !== undefined ? Boolean(r.isWrittenReservation) : (r.is_written_reservation !== undefined ? Boolean(r.is_written_reservation) : true),
+    isLockedToRoom: Boolean(r.isLockedToRoom ?? r.is_locked_to_room),
+    priceVariant: r.priceVariant ?? r.price_variant ?? 'Doppelt belegt',
+    pricePerNight,
+    totalPrice,
+    isFlatRate: Boolean(r.isFlatRate ?? r.is_flat_rate),
+    boardType: r.boardType ?? r.board_type ?? 'Frühstück',
+    hasBreakfast: r.hasBreakfast !== undefined ? Boolean(r.hasBreakfast) : (r.has_breakfast !== undefined ? Boolean(r.has_breakfast) : true),
+    breakfastCount: Number(r.breakfastCount ?? r.breakfast_count) || 1,
+    ohpCount: Number(r.ohpCount ?? r.ohp_count) || 0,
+    twoGangCount: Number(r.twoGangCount ?? r.two_gang_count) || 0,
+    threeGangCount: Number(r.threeGangCount ?? r.three_gang_count) || 0,
+    dailyArrangement: r.dailyArrangement ?? r.daily_arrangement ?? '',
+    billingDebitor: r.billingDebitor ?? r.billing_debitor ?? '',
+    notes: r.notes ?? '',
+    last_name: r.last_name || r.guest?.lastName,
+    first_name: r.first_name || r.guest?.firstName,
+    search_name: r.search_name || r.guest?.searchName,
+    room_code: r.room_code || r.room?.roomCode,
+    room_name: r.room_name || r.room?.name,
+    guest: r.guest || (r.last_name ? {
+      id: guestId,
+      guestNumber: String(r.guest_number || guestId),
+      searchName: r.search_name || r.last_name || '',
+      titleCode: 1,
+      salutation: 'Sehr geehrte(r)',
+      lastName: r.last_name || '',
+      firstName: r.first_name || '',
+      isRegularGuest: false,
+      isTaxExempt: false,
+    } : undefined),
+    room: r.room || (r.room_code ? {
+      id: roomId,
+      roomCode: r.room_code || '',
+      name: r.room_name || `Zimmer ${r.room_code}`,
+      categoryCode: 'DZ',
+      categoryName: 'Doppelzimmer',
+      baseBeds: 2,
+      maxCapacity: 2,
+      basePrice: pricePerNight,
+      floor: 'Hauptgebäude',
+      sortOrder: 1,
+      housekeepingStatus: 'clean',
+    } : undefined),
+  };
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timeline');
   const [rooms, setRooms] = useState<Room[]>(INITIAL_ROOMS);
@@ -34,14 +102,7 @@ export function App() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((r: any) => ({
-            ...r,
-            totalPrice: Number(r.totalPrice) || (Number(r.pricePerNight) || 85) * (Number(r.nights) || 1),
-            pricePerNight: Number(r.pricePerNight) || 85,
-            nights: Number(r.nights) || 1,
-            adultsCount: Number(r.adultsCount) || 1,
-            childrenCount: Number(r.childrenCount) || 0,
-          }));
+          return parsed.map((r: any) => sanitizeReservation(r));
         }
       }
     } catch {}
@@ -107,14 +168,7 @@ export function App() {
       if (resRes && resRes.ok) {
         const data = await resRes.json();
         if (Array.isArray(data) && data.length > 0) {
-          const sanitized = data.map((r: any) => ({
-            ...r,
-            totalPrice: Number(r.totalPrice) || (Number(r.pricePerNight) || 85) * (Number(r.nights) || 1),
-            pricePerNight: Number(r.pricePerNight) || 85,
-            nights: Number(r.nights) || 1,
-            adultsCount: Number(r.adultsCount) || 1,
-            childrenCount: Number(r.childrenCount) || 0,
-          }));
+          const sanitized = data.map((r: any) => sanitizeReservation(r));
           setReservations(sanitized);
           localStorage.setItem('lindengarten_reservations', JSON.stringify(sanitized));
         }
@@ -348,7 +402,7 @@ export function App() {
 
   const handleSaveInvoice = async (invoiceData: Invoice) => {
     setInvoices((prev) => {
-      const idx = prev.findIndex((i) => i.id === invoiceData.id || (invoiceData.reservationId && i.reservationId === invoiceData.reservationId));
+      const idx = prev.findIndex((i) => i.id === invoiceData.id || (invoiceData.invoiceNumber && i.invoiceNumber === invoiceData.invoiceNumber));
       let next;
       if (idx !== -1) {
         next = [...prev];
@@ -365,6 +419,17 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(invoiceData),
     }).catch((err) => console.warn('Backend sync invoice POST:', err));
+  };
+
+  const handleDeleteInvoice = async (id: number) => {
+    setInvoices((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      localStorage.setItem('lindengarten_invoices', JSON.stringify(next));
+      return next;
+    });
+    fetch(`/api/invoices/${id}`, { method: 'DELETE' }).catch((err) =>
+      console.warn('Backend sync DELETE invoice:', err)
+    );
   };
 
   const handleDeleteReservation = async (id: number) => {
@@ -400,7 +465,7 @@ export function App() {
             <div className="bg-slate-100 border-b border-slate-300 px-3 py-1 flex items-center justify-between text-xs shrink-0">
               <div className="flex items-center gap-3">
                 <span className="font-bold text-slate-700 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                  <Calendar className="w-3.5 h-3.5 text-[#376189]" />
                   <span>Zimmerbelegungsplan (Hotel Lindengarten)</span>
                 </span>
                 
@@ -410,7 +475,7 @@ export function App() {
                     onClick={() => setTimelineViewMode('timeline')}
                     className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer ${
                       timelineViewMode === 'timeline'
-                        ? 'bg-blue-600 text-white shadow-xs'
+                        ? 'bg-[#376189] text-white shadow-xs'
                         : 'text-slate-700 hover:bg-slate-100'
                     }`}
                   >
@@ -421,7 +486,7 @@ export function App() {
                     onClick={() => setTimelineViewMode('table')}
                     className={`flex items-center gap-1 px-2.5 py-0.5 rounded text-xs font-semibold transition-colors cursor-pointer ${
                       timelineViewMode === 'table'
-                        ? 'bg-blue-600 text-white shadow-xs'
+                        ? 'bg-[#376189] text-white shadow-xs'
                         : 'text-slate-700 hover:bg-slate-100'
                     }`}
                   >
@@ -430,7 +495,7 @@ export function App() {
                   </button>
                 </div>
 
-                <span className="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[11px] border border-blue-200 hidden md:inline">
+                <span className="bg-[#dce8f3] text-[#1d3349] font-bold px-2 py-0.5 rounded text-[11px] border border-[#c4d8ea] hidden md:inline">
                   {rooms.length} Zimmer | {reservations.length} Buchungen
                 </span>
               </div>
@@ -441,7 +506,7 @@ export function App() {
                     setEditingReservation(null);
                     setIsNewResOpen(true);
                   }}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-0.5 rounded text-xs shadow-xs cursor-pointer transition-colors"
+                  className="bg-[#397356] hover:bg-[#306248] text-white font-semibold px-2.5 py-0.5 rounded text-xs shadow-xs cursor-pointer transition-colors"
                 >
                   + Neue Reservierung [F7]
                 </button>
@@ -455,6 +520,7 @@ export function App() {
                 reservations={reservations}
                 guests={guests}
                 priceVariants={priceVariants}
+                invoices={invoices}
                 onSaveReservation={handleSaveReservation}
                 onDeleteReservation={handleDeleteReservation}
                 onUpdateRoom={handleUpdateRoom}
@@ -466,6 +532,7 @@ export function App() {
                 rooms={rooms}
                 guests={guests}
                 priceVariants={priceVariants}
+                invoices={invoices}
                 onSaveReservation={handleSaveReservation}
                 onDeleteReservation={handleDeleteReservation}
                 onRefresh={fetchData}
@@ -516,6 +583,7 @@ export function App() {
             rooms={rooms}
             guests={guests}
             onSaveInvoice={handleSaveInvoice}
+            onDeleteInvoice={handleDeleteInvoice}
             onRefresh={fetchData}
           />
         )}

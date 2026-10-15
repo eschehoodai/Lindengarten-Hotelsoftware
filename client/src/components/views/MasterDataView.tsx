@@ -24,7 +24,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
       <div className="bg-slate-100 border-b border-slate-300 px-3 py-1.5 flex items-center justify-between text-xs shrink-0">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-bold text-slate-700">
-            <Settings className="w-3.5 h-3.5 text-blue-600" />
+            <Settings className="w-3.5 h-3.5 text-[#376189]" />
             <span>Stammdaten & Konfiguration:</span>
           </div>
           <div className="flex items-center gap-1">
@@ -32,7 +32,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
               onClick={() => setActiveSubTab('prices')}
               className={`flex items-center gap-1 px-3 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 activeSubTab === 'prices'
-                  ? 'bg-blue-600 text-white font-semibold'
+                  ? 'bg-[#376189] text-white font-semibold shadow-xs'
                   : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
               }`}
             >
@@ -43,7 +43,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
               onClick={() => setActiveSubTab('salutations')}
               className={`flex items-center gap-1 px-3 py-0.5 rounded text-xs font-medium transition-colors cursor-pointer ${
                 activeSubTab === 'salutations'
-                  ? 'bg-blue-600 text-white font-semibold'
+                  ? 'bg-[#376189] text-white font-semibold shadow-xs'
                   : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
               }`}
             >
@@ -79,7 +79,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                     onClick={() => setSelectedPriceId(pv.id)}
                     className={`cursor-pointer transition-colors ${
                       isSelected
-                        ? 'bg-blue-600 text-white font-semibold'
+                        ? 'bg-[#376189] text-white font-semibold'
                         : 'hover:bg-slate-100 text-slate-800'
                     }`}
                   >
@@ -89,7 +89,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                     <td className="py-1 px-3 text-center font-sans">
                       {pv.isFlatRate ? (
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          isSelected ? 'bg-emerald-400 text-slate-900' : 'bg-emerald-100 text-emerald-800'
+                          isSelected ? 'bg-white/20 text-white' : 'bg-[#edf6f1] text-[#285740]'
                         }`}>
                           <CheckCircle2 className="w-2.5 h-2.5" />
                           <span>Ja (Pauschal)</span>
@@ -122,7 +122,7 @@ export const MasterDataView: React.FC<MasterDataViewProps> = ({
                     onClick={() => setSelectedSalId(sal.id)}
                     className={`cursor-pointer transition-colors ${
                       isSelected
-                        ? 'bg-blue-600 text-white font-semibold'
+                        ? 'bg-[#376189] text-white font-semibold'
                         : 'hover:bg-slate-100 text-slate-800'
                     }`}
                   >

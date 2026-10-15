@@ -104,8 +104,13 @@ referenzbilder/
     * **Konto C:** Weiteres Unterkonto für Nebenkosten oder Dritte.
   * Eigene Zahlungsart je Folio (`ZA: BAR / EC / KREDITKARTE`).
   * Umbuchung von Zeilen zwischen A, B und C per Schnellbutton.
+  * **Ampel-Zahlungsstatus & Filter:**
+    * **Grün:** Vollständig bezahlt (alle Rechnungen bezahlt).
+    * **Gelber visueller Punkt (Ampel):** Teilbezahlt (mindestens 1 Rechnung bezahlt, mindestens 1 Rechnung offen).
+    * **Rot:** Vollständig offen (keine Rechnung bezahlt).
+    * **Filteroptionen linke Spalte:** `Alle`, `Offen`, `Teilbezahlt` (Filter auf Buchungen mit gelbem Ampelpunkt), `Bezahlt`, `Freie Kasse`.
 * **Rechnungsaktionen:**
-  * `Sofortdruck (F6)`, `Detaildruck`, `Vorschau`, `Zahlungsart`, `Storno`, `Debitor wechseln`.
+  * `Sofortdruck (F6)`, `Detaildruck`, `Vorschau`, `Zahlungsart`, `Storno`, `Debitor wechseln`, `+ Weitere Rechnung schreiben (F8)`.
 
 ---
 
@@ -443,7 +448,97 @@ graph TD
      - Live-Statusanzeige: `Reser Reservierung auf: [Nr] [Gastname] ([Nächte]Ü/[Personen]P. (GPr.: [Betrag] €) / Z:[Zimmer])`.
    - [x] **Ansichts-Umschalter**:
      - 1-Klick-Wechsel zwischen **2D-Timeline (Belegungsplan)** und **Tabellarischer Buchungsliste** (`ReservationsView`).
-5. **Phase 5: Kasse, Folio-Split (A/B/C) & Drittsysteme**
+5. **Phase 5: Kasse, Folio-Split (A/B/C) & TSE**
    - 3-Wege Folio-Splitting und Zahlungsart-Handling.
    - Fiskaly Cloud-TSE Anbindung mit Offline-Resilienz.
    - Meldeschein-PDF und ZUGFeRD 2.0.1 E-Rechnung.
+6. **Phase 6: DIRS21 Channel Manager Schnittstelle (2-Wege Light)**
+   - Lokales Polling (Pull) alle 2 Minuten in Express (`index.ts`) ohne externe Serverkosten (0,00 €).
+   - "Zimmer-Tetris"-Lösung: Nullable `roomId` + Fallback-Zeile `⚠️ Nicht zugewiesen` im Kalender.
+   - Buchungs-Lebenszyklus (`NEW`, `MODIFY`, `CANCEL`).
+   - SQLite `sync_queue` für blockierungsfreies Verschieben im Frontend mit Hintergrund-Sync an DIRS21.
+
+---
+
+## 9. DIRS21 Channel Manager & OTA-Schnittstelle (2-Wege Light)
+
+### 9.1 Architektur-Konzept: „2-Wege Light“
+Statt einer hochkomplexen Enterprise-Schnittstelle mit Übertragung von Preisrastern, Saisonkurven und Restriktionen (ARI) wird das System auf das betriebliche Minimum reduziert:
+* **Preise & Konditionen:** Verbleiben zu 100 % im DIRS21-Cockpit. Der Hotelier pflegt Sonderpreise, Rabatte und Saisonpreise direkt dort. Eingehende Buchungen liefern den fertigen Endpreis, der direkt in die Buchung übernommen wird.
+* **Synchronisation (PMS $\leftrightarrow$ DIRS21):**
+  * **Inbound:** Automatische Abholung neuer Online-Buchungen (Booking.com, Expedia, DIRS21 IBE) und Eintrag in den Kalender.
+  * **Outbound:** Übertragung der reinen Anzahl freier Zimmer pro Kategorie und Tag an DIRS21 bei Vor-Ort-Buchungen oder Sperrungen an der Rezeption.
+
+### 9.2 Lokale Pull-Architektur (0,00 € Serverkosten)
+* **Kein gemieteter Cloud-Server, keine feste IP, kein Tunnel erforderlich:** Der lokale Express-Server (`index.ts`) auf dem Rezeptions-PC fragt alle 2 Minuten aktiv bei DIRS21 an (`OTA_ReadRQ` oder REST-GET).
+* **Nachtruhe & Rechner-Ausfall:** DIRS21 hält neue Reservierungen in einer internen Server-Warteschlange (Queue), bis der Rezeptions-PC morgens startet, alle Buchungen gebündelt abholt und quittiert (`OTA_HotelResNotifRS`).
+* **Überbuchungsschutz:** Findet zu 90 % direkt bei DIRS21 statt. Bucht ein Gast nachts um 02:00 Uhr auf Booking.com, sperrt DIRS21 sofort Expedia und die Hotel-Website, auch wenn der Rechner im Hotel ausgeschaltet ist.
+
+### 9.3 Lösung für das „Zimmer-Tetris-Problem“
+* **Problem:** Online-Portale buchen auf **Kategorie-Ebene** (z. B. 1x TBZ). Ist Kategorie TBZ vom 10.–15.10. frei, aber gestückelt (Zimmer *Prinze* 10.–12., Zimmer *Tobias* 12.–15.), findet ein automatischer Zuweiser kein durchgehend freies Einzelzimmer.
+* **Lösung:**
+  * Das Datenbankfeld `roomId` in `reservations` ist **optional (nullable)**.
+  * Findet das Backend ein passendes, durchgehend freies Zimmer der Kategorie, wird es automatisch zugewiesen.
+  * Findet es keines, wird die Buchung mit `roomId = null` angelegt.
+  * In `TimelineScheduler.tsx` existiert eine feste oberste Zeile: **„⚠️ Nicht zugewiesen / Zuweisung prüfen“**.
+  * Die Rezeptionistin sieht unzugeordnete Buchungen sofort und kann bestehende Buchungen per Drag-and-Drop verschieben, um die Lücke freizuschaufeln.
+
+### 9.4 Buchungs-Lebenszyklus (New, Modify, Cancel)
+* **Neu (`NEW`):** Gast & Buchung anlegen, Zimmer zuweisen oder in Unassigned-Zeile ablegen, Quittierung an DIRS21.
+* **Änderung (`MODIFY`):** Bestehende Buchung anhand von `externalReservationId` lokalisieren. Prüfen, ob das bisherige Zimmer im neuen Zeitraum kollisionsfrei ist. Falls ja, Zeit anpassen; falls nein, auf `roomId = null` setzen.
+* **Stornierung (`CANCEL`):** Buchungsstatus in SQLite auf `cancelled` setzen (GoBD-Historie bleibt gewahrt) und das Zimmer sofort im Kalender und in der DIRS21-Queue freigeben.
+
+### 9.5 Entkoppelte Outbound-Queue (`sync_queue`)
+* Beim Verschieben oder Anlegen von Buchungen im Kalender darf die UI niemals durch HTTP-Aufrufe an DIRS21 blockiert werden.
+* Änderungen schreiben innerhalb von Millisekunden in eine lokale SQLite-Tabelle `sync_queue` (`category_code`, `date_from`, `date_to`, `status`).
+* Ein schlanker Hintergrund-Worker (Node.js `setInterval` alle 15 Sekunden) aggregiert die geänderten Zeiträume, berechnet die verbleibende Verfügbarkeit und sendet ein gebündeltes Update an DIRS21 (inklusive Retry bei Internet-Schwankungen).
+
+### 9.6 Frontend-Aktualisierung
+* Statt ressourcenhungriger WebSockets: Schlankes Polling im Client alle 30 Sekunden (`useQuery` / `fetch`) plus automatischer Refetch beim Fokussieren des Rezeptions-Fensters (`window.onfocus`).
+
+### 9.7 E-Mail-Vorlage für DIRS21-Schnittstellenanfrage
+
+```text
+An: support@dirs21.de
+Betreff: Anfrage PMS-Schnittstelle (Pull-Abfrage & Verfügbarkeitsabgleich) – Hotel Lindengarten
+
+Sehr geehrtes DIRS21-Team,
+
+wir stellen im Hotel Lindengarten (Kundennummer / DIRS21-ID: [Ihre DIRS21-ID]) aktuell auf eine eigene, lokal im Haus betriebene Hotelsoftware (PMS) um und möchten diese über eine 2-Wege-Schnittstelle an DIRS21 anbinden.
+
+Da unsere Software lokal auf dem Rezeptions-PC im Hotelnetzwerk läuft, möchten wir die Anbindung so schlank wie möglich über das Pull-Verfahren umsetzen:
+
+1. Buchungsabruf (Inbound per Pull): Unser lokales System fragt in regelmäßigen Intervallen (z. B. alle 2 Minuten) aktiv bei DIRS21 ab, ob neue Reservierungen, Änderungen oder Stornierungen vorliegen (z. B. via OTA_ReadRQ oder REST-Abfrage), und bestätigt anschließend den Empfang. Ein externer Push/Webhook von außen in unser Hotelnetzwerk ist dadurch nicht erforderlich.
+
+2. Verfügbarkeitsabgleich (Outbound): Sobald an unserer Rezeption Zimmer manuell gebucht, verschoben oder storniert werden, sendet unser System die aktualisierte Anzahl freier Zimmer pro Kategorie und Zeitraum per HTTPS-Request an DIRS21 (z. B. via OTA_HotelAvailNotifRQ). Die Pflege sämtlicher Preise, Raten und Restriktionen verbleibt weiterhin direkt im DIRS21-Cockpit.
+
+Bitte teilen Sie uns hierzu kurz mit:
+1. Welche Schnittstellenvariante (OTA-XML Webservice oder JSON/REST-API) Sie für diesen Anwendungsfall (Pull-Abruf + Verfügbarkeits-Update) empfehlen und freischalten können.
+2. Wie wir die technische Schnittstellendokumentation sowie die Zugangsdaten (Endpunkt-URLs, API-Key / Zugangsdaten für Test- und Produktivsystem) erhalten.
+3. Welche aktuellen Kategorie-Codes (Room Type IDs) in unserem DIRS21-Account hinterlegt sind, damit wir die Zuordnung vorab einrichten können.
+4. Ob für die Freischaltung dieser Schnittstelle einmalige oder monatliche Gebühren anfallen.
+
+Vielen Dank im Voraus für Ihre Unterstützung und Rückmeldung.
+
+Mit freundlichen Grüßen
+[Name Rezeption / Hotelier]
+Hotel Lindengarten
+```
+
+### 9.8 Konkrete nächste Umsetzungsschritte (Arbeitsgrundlage für morgen)
+
+* **Aktueller Status:** Schnittstellenanfrage an den DIRS21-Support vorbereitet.
+* **Sobald DIRS21 rückmeldet, welches Format (REST oder OTA-XML) freigeschaltet wird, bauen wir als Erstes:**
+  1. **Unzugewiesene Zeile im Kalender (`TimelineScheduler.tsx`):**
+     - Integration einer festen Posteingangszeile ganz oben: `⚠️ Nicht zugewiesen / Zuweisung prüfen`.
+     - Unterstützung für Reservierungen mit `roomId = null` im 2D-Scheduler inklusive Drag-and-Drop zur manuellen Zuordnung auf ein freies Zimmer.
+  2. **Abfrage-Worker im Express-Backend (`server/src/index.ts`):**
+     - Einrichtung des 2-Minuten-Polling-Intervalls (`setInterval`).
+     - Format-Parser (JSON oder XML) für eingehende Reservierungen.
+     - First-Fit Zimmerzuweisung mit Fallback auf `roomId = null`.
+     - Senden der Empfangsbestätigung an DIRS21 (`OTA_HotelResNotifRS` bzw. HTTP 200).
+  3. **Datenbankerweiterung (`server/src/db/schema.ts`):**
+     - `roomId` in der Tabelle `reservations` auf `nullable` umstellen.
+     - Felder `externalReservationId`, `channelSource` und die Tabelle `sync_queue` ergänzen.
+
+

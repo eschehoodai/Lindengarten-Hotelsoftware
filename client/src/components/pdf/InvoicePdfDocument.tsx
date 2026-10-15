@@ -73,7 +73,7 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
           {onDownloadPdf && (
             <button
               onClick={onDownloadPdf}
-              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-semibold cursor-pointer transition-colors shadow-xs"
+              className="flex items-center gap-1.5 bg-[#376189] hover:bg-[#2c4f70] text-white px-3 py-1 rounded text-xs font-semibold cursor-pointer transition-colors shadow-xs"
               title="Als PDF herunterladen"
             >
               <Download className="w-3.5 h-3.5" />
@@ -82,7 +82,7 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
           )}
           <button
             onClick={handlePrint}
-            className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs font-semibold cursor-pointer transition-colors shadow-xs"
+            className="flex items-center gap-1.5 bg-[#397356] hover:bg-[#2c5b44] text-white px-3 py-1 rounded text-xs font-semibold cursor-pointer transition-colors shadow-xs"
             title="Drucken / Als PDF speichern"
           >
             <Printer className="w-3.5 h-3.5" />
@@ -324,7 +324,7 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
           </div>
 
           {/* 6. PERSÖNLICHER SCHLUSSTEXT / DANKESFORMEL */}
-          <div className="bg-slate-50/80 border-l-4 border-blue-600 p-3 rounded-r my-4 text-xs font-sans text-slate-800 leading-relaxed">
+          <div className="bg-slate-50/80 border-l-4 border-[#376189] p-3 rounded-r my-4 text-xs font-sans text-slate-800 leading-relaxed">
             <p className="font-medium">
               {invoice.closingText || 'Vielen Dank für Ihren Aufenthalt im Hotel Lindengarten! Wir hoffen, Sie hatten eine erholsame Zeit bei uns und beehren uns gerne wieder.'}
             </p>

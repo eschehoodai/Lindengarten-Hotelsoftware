@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   FileText, ShieldCheck, Printer, Code, 
-  CreditCard, CheckCircle2, Building, User, Layers, RefreshCw,
-  Search, Plus, Trash2, Calendar, BedDouble, Edit3, Eye, Download,
-  Check, Save, ArrowUpDown, DollarSign, HeartHandshake, HelpCircle
+  CheckCircle2, User, 
+  Search, Plus, Trash2, Calendar, BedDouble, Edit3, Eye,
+  Check, Save, DollarSign, HeartHandshake,
+  FilePlus2, ArrowRightLeft, Receipt, X
 } from 'lucide-react';
 import type { Reservation, Room, Guest, Invoice } from '../../types';
 import { 
   type InvoiceLineItem, 
-  calculateSplitTax, 
   roundToCent 
 } from '../../services/taxEngine';
 import { 
   generateInvoiceFromReservation, 
+  createAdditionalInvoice,
+  createFreeInvoice,
   recalculateInvoiceTotals, 
   DEFAULT_CLOSING_TEXT 
 } from '../../services/invoiceGenerator';
@@ -25,6 +27,7 @@ interface InvoicesViewProps {
   rooms: Room[];
   guests: Guest[];
   onSaveInvoice: (invoice: Invoice) => Promise<void> | void;
+  onDeleteInvoice?: (id: number) => Promise<void> | void;
   onRefresh: () => void;
 }
 
@@ -34,21 +37,78 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
   rooms,
   guests,
   onSaveInvoice,
-  onRefresh,
+  onDeleteInvoice,
 }) => {
-  // 1. STATE: Selektierte Reservierung
-  const [selectedResId, setSelectedResId] = useState<number>(() => {
-    return reservations[0]?.id || 1;
-  });
+  // 1. STATE: Selektion links (Buchung oder freie Kassenrechnung)
+  const [selectedType, setSelectedType] = useState<'reservation' | 'freeInvoice'>('reservation');
+  const [selectedResId, setSelectedResId] = useState<number | null>(() => reservations[0]?.id || 1);
+  const [selectedFreeInvId, setSelectedFreeInvId] = useState<number | null>(null);
+
+  // Rechnungs-Tab innerhalb der aktiven Buchung (Folio-Splitting A, B, ...)
+  const [activeInvoiceId, setActiveInvoiceId] = useState<number | null>(null);
 
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'paid'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'partial' | 'paid' | 'free'>('all');
   const [viewMode, setViewMode] = useState<'edit' | 'pdf'>('edit');
   const [xmlPreviewOpen, setXmlPreviewOpen] = useState<boolean>(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+  const [moveDropdownPosIdx, setMoveDropdownPosIdx] = useState<number | null>(null);
+
+  // Aktive Reservierung ermitteln
+  const activeReservation = useMemo(() => {
+    if (selectedType !== 'reservation' || !selectedResId) return null;
+    return reservations.find((r) => r.id === selectedResId) || reservations[0] || null;
+  }, [reservations, selectedType, selectedResId]);
+
+  // Rechnungen für die aktive Reservierung
+  const bookingInvoices = useMemo(() => {
+    if (!activeReservation) return [];
+    return invoices.filter((inv) => inv.reservationId === activeReservation.id);
+  }, [invoices, activeReservation]);
+
+  // Freie Kassenrechnungen (ohne Reservierungsbezug)
+  const freeInvoices = useMemo(() => {
+    return invoices.filter((inv) => !inv.reservationId);
+  }, [invoices]);
+
+  // Zähler für Filter-Badges
+  const counts = useMemo(() => {
+    let openCount = 0;
+    let partialCount = 0;
+    let paidCount = 0;
+
+    reservations.forEach((res) => {
+      const matchingInvs = invoices.filter((inv) => inv.reservationId === res.id);
+      const hasInvs = matchingInvs.length > 0;
+      const isFullyPaid = hasInvs && matchingInvs.every((inv) => inv.isPaid);
+      const isPartiallyPaid = hasInvs && !isFullyPaid && matchingInvs.some((inv) => inv.isPaid);
+
+      if (isFullyPaid) {
+        paidCount++;
+      } else if (isPartiallyPaid) {
+        partialCount++;
+      } else {
+        openCount++;
+      }
+    });
+
+    freeInvoices.forEach((inv) => {
+      if (inv.isPaid) paidCount++;
+      else openCount++;
+    });
+
+    return {
+      all: reservations.length + freeInvoices.length,
+      open: openCount,
+      partial: partialCount,
+      paid: paidCount,
+      free: freeInvoices.length,
+    };
+  }, [reservations, freeInvoices, invoices]);
 
   // Gefilterte Buchungen für die Master-Liste links
   const filteredReservations = useMemo(() => {
+    if (statusFilter === 'free') return [];
     return reservations.filter((res) => {
       const guest = res.guest || guests.find((g) => g.id === res.guestId);
       const room = res.room || rooms.find((r) => r.id === res.roomId);
@@ -60,81 +120,71 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       const matchesSearch = !q || guestName.includes(q) || roomName.includes(q) || resNum.includes(q);
       if (!matchesSearch) return false;
 
-      // Statusprüfung
-      const matchingInv = invoices.find((inv) => inv.reservationId === res.id);
-      const isPaid = matchingInv ? matchingInv.isPaid : false;
+      // Statusprüfung über alle Rechnungen dieser Buchung
+      const matchingInvs = invoices.filter((inv) => inv.reservationId === res.id);
+      const hasInvoices = matchingInvs.length > 0;
+      const isFullyPaid = hasInvoices && matchingInvs.every((inv) => inv.isPaid);
+      const isPartiallyPaid = hasInvoices && !isFullyPaid && matchingInvs.some((inv) => inv.isPaid);
+      const isCompletelyOpen = !hasInvoices || matchingInvs.every((inv) => !inv.isPaid);
 
-      if (statusFilter === 'open' && isPaid) return false;
-      if (statusFilter === 'paid' && !isPaid) return false;
+      if (statusFilter === 'open' && !isCompletelyOpen) return false;
+      if (statusFilter === 'partial' && !isPartiallyPaid) return false;
+      if (statusFilter === 'paid' && !isFullyPaid) return false;
 
       return true;
     });
   }, [reservations, guests, rooms, searchQuery, statusFilter, invoices]);
 
-  // Aktive Reservierung ermitteln
-  const activeReservation = useMemo(() => {
-    return reservations.find((r) => r.id === selectedResId) || reservations[0] || null;
-  }, [reservations, selectedResId]);
+  // Gefilterte freie Kassenrechnungen
+  const filteredFreeInvoices = useMemo(() => {
+    return freeInvoices.filter((inv) => {
+      const q = searchQuery.toLowerCase();
+      const matchesSearch = !q || 
+        (inv.recipientName || '').toLowerCase().includes(q) || 
+        (inv.invoiceNumber || '').toLowerCase().includes(q) ||
+        (inv.recipientCompany || '').toLowerCase().includes(q);
+      if (!matchesSearch) return false;
+
+      if (statusFilter === 'open' && inv.isPaid) return false;
+      if (statusFilter === 'partial') return false; // Freie Kassenbelege sind entweder ganz bezahlt oder offen
+      if (statusFilter === 'paid' && !inv.isPaid) return false;
+
+      return true;
+    });
+  }, [freeInvoices, searchQuery, statusFilter]);
 
   // 2. STATE: Aktuelle Rechnung im Bearbeitungsmodus
   const [currentInvoice, setCurrentInvoice] = useState<Invoice | null>(null);
 
-  // Synchronisiere currentInvoice, wenn sich die gewählte Reservierung ändert
+  // Synchronisiere currentInvoice, wenn sich Selektion oder Rechnungen ändern
   useEffect(() => {
-    if (!activeReservation) return;
-
-    // Prüfe, ob bereits eine gespeicherte Rechnung für diese Reservierung vorliegt
-    const existing = invoices.find((inv) => inv.reservationId === activeReservation.id);
-    const generated = generateInvoiceFromReservation(
-      activeReservation, 
-      existing, 
-      guests, 
-      rooms
-    );
-
-    setCurrentInvoice(generated);
-  }, [activeReservation, invoices, guests, rooms]);
-
-  // Tastaturnavigation in der Reservierungsliste (Pfeiltasten ↑ / ↓)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Nicht reagieren, wenn in Textfeldern getippt wird
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
-        if (e.key === 'F9') {
-          e.preventDefault();
-          handleSave();
-        }
+    if (selectedType === 'freeInvoice' && selectedFreeInvId) {
+      const freeInv = freeInvoices.find((i) => i.id === selectedFreeInvId);
+      if (freeInv) {
+        setCurrentInvoice(freeInv);
         return;
       }
+    }
 
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        const curIdx = filteredReservations.findIndex((r) => r.id === selectedResId);
-        if (curIdx < filteredReservations.length - 1) {
-          setSelectedResId(filteredReservations[curIdx + 1].id);
+    if (selectedType === 'reservation' && activeReservation) {
+      if (bookingInvoices.length > 0) {
+        const found = bookingInvoices.find((i) => i.id === activeInvoiceId) || bookingInvoices[0];
+        setCurrentInvoice(found);
+        if (activeInvoiceId !== found.id) {
+          setActiveInvoiceId(found.id);
         }
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        const curIdx = filteredReservations.findIndex((r) => r.id === selectedResId);
-        if (curIdx > 0) {
-          setSelectedResId(filteredReservations[curIdx - 1].id);
-        }
-      } else if (e.key === 'F6') {
-        e.preventDefault();
-        setViewMode('pdf');
-        setTimeout(() => window.print(), 200);
-      } else if (e.key === 'F7') {
-        e.preventDefault();
-        handleAddItem();
-      } else if (e.key === 'F9') {
-        e.preventDefault();
-        handleSave();
+      } else {
+        const generated = generateInvoiceFromReservation(
+          activeReservation, 
+          null, 
+          guests, 
+          rooms
+        );
+        setCurrentInvoice(generated);
+        setActiveInvoiceId(generated.id);
       }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredReservations, selectedResId, currentInvoice]);
+    }
+  }, [selectedType, selectedResId, selectedFreeInvId, activeInvoiceId, bookingInvoices, freeInvoices, activeReservation, guests, rooms]);
 
   // Hilfsfunktion: Positionen im Invoice aktualisieren und Summen neu berechnen
   const updateItems = (newItems: InvoiceLineItem[]) => {
@@ -159,7 +209,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     const nextPosNum = currentItems.length + 1;
 
     const newItem: InvoiceLineItem = {
-      id: Date.now(),
+      id: Date.now() + Math.floor(Math.random() * 100),
       positionNumber: nextPosNum,
       folioBucket: 'A',
       description: preset?.desc || 'Zusatzleistung / Bewirtung',
@@ -227,6 +277,166 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       console.error('Fehler beim Speichern der Rechnung:', err);
     }
   };
+
+  // Weitere Rechnung (Zweitrechnung) zur aktiven Buchung anlegen
+  const handleCreateAdditional = async () => {
+    if (selectedType === 'reservation' && activeReservation) {
+      // Wenn noch keine Rechnung gespeichert ist, speichern wir erst die Hauptrechnung
+      const baseInvoices = bookingInvoices.length > 0 ? bookingInvoices : (currentInvoice ? [currentInvoice] : []);
+      if (bookingInvoices.length === 0 && currentInvoice) {
+        await onSaveInvoice(currentInvoice);
+      }
+
+      const newAdditional = createAdditionalInvoice(activeReservation, baseInvoices, guests, rooms);
+      await onSaveInvoice(newAdditional);
+      setActiveInvoiceId(newAdditional.id);
+      setCurrentInvoice(newAdditional);
+      setSaveSuccessMsg(`Zweitrechnung ${newAdditional.invoiceNumber} angelegt!`);
+      setTimeout(() => setSaveSuccessMsg(null), 3500);
+    } else {
+      handleCreateFree();
+    }
+  };
+
+  // Freie Kassenrechnung (ohne Buchungsbezug) anlegen
+  const handleCreateFree = async () => {
+    const newFree = createFreeInvoice();
+    await onSaveInvoice(newFree);
+    setSelectedType('freeInvoice');
+    setSelectedFreeInvId(newFree.id);
+    setSelectedResId(null);
+    setActiveInvoiceId(newFree.id);
+    setCurrentInvoice(newFree);
+    setSaveSuccessMsg(`Freie Kassenrechnung ${newFree.invoiceNumber} angelegt!`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+  };
+
+  // Position auf eine andere Rechnung verschieben (Folio-Split A/B)
+  const handleMoveItemToInvoice = async (itemIndex: number, targetInvoiceId: number) => {
+    if (!currentInvoice || !currentInvoice.items) return;
+    const itemToMove = currentInvoice.items[itemIndex];
+    if (!itemToMove) return;
+
+    // 1. Aus aktueller Rechnung entfernen
+    const updatedSourceItems = currentInvoice.items.filter((_, idx) => idx !== itemIndex).map((it, idx) => ({
+      ...it,
+      positionNumber: idx + 1,
+    }));
+    const sourceTotals = recalculateInvoiceTotals(updatedSourceItems);
+    const updatedSourceInvoice: Invoice = {
+      ...currentInvoice,
+      items: updatedSourceItems,
+      ...sourceTotals,
+    };
+
+    // 2. Zur Zielrechnung hinzufügen
+    const targetInvoice = bookingInvoices.find((i) => i.id === targetInvoiceId);
+    if (!targetInvoice) return;
+
+    const targetItems = [...(targetInvoice.items || [])];
+    const newTargetItem: InvoiceLineItem = {
+      ...itemToMove,
+      id: Date.now() + Math.floor(Math.random() * 100),
+      positionNumber: targetItems.length + 1,
+    };
+    const updatedTargetItems = [...targetItems, newTargetItem];
+    const targetTotals = recalculateInvoiceTotals(updatedTargetItems);
+    const updatedTargetInvoice: Invoice = {
+      ...targetInvoice,
+      items: updatedTargetItems,
+      ...targetTotals,
+    };
+
+    // 3. Beide Rechnungen synchronisieren
+    await onSaveInvoice(updatedSourceInvoice);
+    await onSaveInvoice(updatedTargetInvoice);
+
+    setCurrentInvoice(updatedSourceInvoice);
+    setMoveDropdownPosIdx(null);
+    setSaveSuccessMsg(`Position "${itemToMove.description}" auf ${updatedTargetInvoice.invoiceNumber} verschoben!`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+  };
+
+  // Einzelne Rechnung löschen / stornieren
+  const handleDeleteSpecificInvoice = async (invId: number) => {
+    const invToDelete = invoices.find((i) => i.id === invId) || (currentInvoice?.id === invId ? currentInvoice : null);
+    if (!invToDelete) return;
+    if (!window.confirm(`Möchten Sie die Rechnung ${invToDelete.invoiceNumber} wirklich löschen?`)) {
+      return;
+    }
+
+    try {
+      if (onDeleteInvoice) {
+        await onDeleteInvoice(invId);
+      }
+      setSaveSuccessMsg(`Rechnung ${invToDelete.invoiceNumber} gelöscht.`);
+      setTimeout(() => setSaveSuccessMsg(null), 3000);
+
+      const remaining = bookingInvoices.filter((i) => i.id !== invId);
+      if (remaining.length > 0) {
+        setActiveInvoiceId(remaining[0].id);
+        setCurrentInvoice(remaining[0]);
+      } else if (reservations.length > 0) {
+        setSelectedType('reservation');
+        setSelectedResId(reservations[0].id);
+        setSelectedFreeInvId(null);
+      }
+    } catch (err) {
+      console.error('Fehler beim Löschen der Rechnung:', err);
+    }
+  };
+
+  const handleDeleteCurrentInvoice = async () => {
+    if (!currentInvoice) return;
+    await handleDeleteSpecificInvoice(currentInvoice.id);
+  };
+
+  // Tastaturnavigation & Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes((e.target as HTMLElement).tagName)) {
+        if (e.key === 'F9') {
+          e.preventDefault();
+          handleSave();
+        }
+        return;
+      }
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (selectedType === 'reservation') {
+          const curIdx = filteredReservations.findIndex((r) => r.id === selectedResId);
+          if (curIdx < filteredReservations.length - 1) {
+            setSelectedResId(filteredReservations[curIdx + 1].id);
+          }
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (selectedType === 'reservation') {
+          const curIdx = filteredReservations.findIndex((r) => r.id === selectedResId);
+          if (curIdx > 0) {
+            setSelectedResId(filteredReservations[curIdx - 1].id);
+          }
+        }
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setViewMode('pdf');
+        setTimeout(() => window.print(), 200);
+      } else if (e.key === 'F7') {
+        e.preventDefault();
+        handleAddItem();
+      } else if (e.key === 'F8') {
+        e.preventDefault();
+        handleCreateAdditional();
+      } else if (e.key === 'F9') {
+        e.preventDefault();
+        handleSave();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [filteredReservations, selectedResId, selectedType, currentInvoice]);
 
   // ZUGFeRD / Factur-X XML Vorschau
   const generateZugferdXmlPreview = () => {
@@ -300,6 +510,11 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
           <span className="bg-blue-100 text-blue-900 font-bold px-2 py-0.5 rounded text-[11px] border border-blue-200">
             {reservations.length} Zimmer belegt
           </span>
+          {freeInvoices.length > 0 && (
+            <span className="bg-purple-100 text-purple-900 font-bold px-2 py-0.5 rounded text-[11px] border border-purple-200">
+              {freeInvoices.length} Kassenbelege
+            </span>
+          )}
           {saveSuccessMsg && (
             <span className="bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded text-[11px] border border-emerald-300 animate-in fade-in flex items-center gap-1">
               <Check className="w-3 h-3" />
@@ -329,19 +544,24 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       {/* 2. HAUPTBEREICH: MASTER-DETAIL SPLITSCREEN */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
         
-        {/* LINKE SPALTE: GEBUCHTE ZIMMER & VORGÄNGE (MASTER) */}
+        {/* LINKE SPALTE: VORGÄNGE & FREIE RECHNUNGEN (MASTER) */}
         <div className="w-84 md:w-96 bg-white border-r border-slate-300 flex flex-col shrink-0 min-h-0 shadow-xs">
           
-          {/* Header & Suchleiste */}
+          {/* Header & Aktionen */}
           <div className="p-2.5 bg-slate-50 border-b border-slate-200 flex flex-col gap-2 shrink-0">
             <div className="flex items-center justify-between">
               <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
                 <BedDouble className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Gebuchte Zimmer & Belegungen</span>
+                <span>Gebuchte Zimmer & Vorgänge</span>
               </span>
-              <span className="text-[10px] text-slate-500 font-mono">
-                {filteredReservations.length} Treffer
-              </span>
+              <button
+                onClick={handleCreateFree}
+                className="flex items-center gap-1 bg-white hover:bg-purple-50 text-purple-700 border border-purple-300 px-2 py-0.5 rounded text-[10px] font-bold cursor-pointer shadow-xs transition-colors"
+                title="Rechnung ohne Zimmerbuchung erstellen (z. B. Thekenverkauf / Restaurant)"
+              >
+                <Plus className="w-3 h-3 text-purple-600" />
+                <span>+ Freie Rechnung</span>
+              </button>
             </div>
 
             {/* Suchfeld */}
@@ -349,119 +569,237 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Gast, Zimmer, Res-Nr. suchen..."
+                placeholder="Gast, Zimmer, Res-Nr. oder Beleg suchen..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded pl-8 pr-2 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-blue-500"
               />
             </div>
 
-            {/* Filter-Chips */}
-            <div className="flex items-center gap-1 text-[11px]">
+            {/* Filter-Chips (Matte & Ruhige Palette) */}
+            <div className="flex items-center gap-1 text-[11px] flex-wrap">
               <button
                 onClick={() => setStatusFilter('all')}
                 className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors ${
                   statusFilter === 'all'
-                    ? 'bg-blue-600 text-white font-bold'
+                    ? 'bg-[#376189] text-white font-bold shadow-xs'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                 }`}
               >
-                Alle ({reservations.length})
+                Alle ({counts.all})
               </button>
               <button
                 onClick={() => setStatusFilter('open')}
-                className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors flex items-center gap-1 ${
                   statusFilter === 'open'
-                    ? 'bg-amber-600 text-white font-bold'
+                    ? 'bg-[#bd4343] text-white font-bold shadow-xs'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                 }`}
               >
-                Offen
+                <span className="w-2 h-2 rounded-full bg-[#bd4343] shadow-xs shrink-0 inline-block" />
+                <span>Offen ({counts.open})</span>
+              </button>
+              <button
+                onClick={() => setStatusFilter('partial')}
+                className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors flex items-center gap-1 ${
+                  statusFilter === 'partial'
+                    ? 'bg-[#d4973b] text-slate-950 font-bold shadow-xs'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
+                title="Nur Buchungen mit teilweise bezahlten Rechnungen anzeigen"
+              >
+                <span className="w-2.5 h-2.5 rounded-full bg-[#d4973b] border border-[#b06a1f] shadow-xs shrink-0 inline-block animate-pulse" />
+                <span>Teilbezahlt ({counts.partial})</span>
               </button>
               <button
                 onClick={() => setStatusFilter('paid')}
-                className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors ${
+                className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors flex items-center gap-1 ${
                   statusFilter === 'paid'
-                    ? 'bg-emerald-600 text-white font-bold'
+                    ? 'bg-[#2ea36f] text-white font-bold shadow-xs'
                     : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
                 }`}
               >
-                Bezahlt
+                <span className="w-2 h-2 rounded-full bg-[#2ea36f] shadow-xs shrink-0 inline-block" />
+                <span>Bezahlt ({counts.paid})</span>
+              </button>
+              <button
+                onClick={() => setStatusFilter('free')}
+                className={`px-2 py-0.5 rounded cursor-pointer font-medium transition-colors ${
+                  statusFilter === 'free'
+                    ? 'bg-[#6d5684] text-white font-bold shadow-xs'
+                    : 'bg-slate-200 text-slate-700 hover:bg-slate-300'
+                }`}
+              >
+                Freie Kasse ({counts.free})
               </button>
             </div>
           </div>
 
-          {/* Buchungs-Liste */}
+          {/* Buchungs- & Kassenbeleg-Liste */}
           <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
-            {filteredReservations.length === 0 ? (
-              <div className="p-8 text-center text-slate-400 italic text-xs">
-                Keine passenden Buchungen gefunden.
-              </div>
-            ) : (
-              filteredReservations.map((res) => {
-                const isSelected = selectedResId === res.id;
-                const guest = res.guest || guests.find((g) => g.id === res.guestId);
-                const room = res.room || rooms.find((r) => r.id === res.roomId);
-                const guestFullName = `${guest?.firstName || ''} ${guest?.lastName || ''}`.trim() || res.last_name || 'Gast';
-                
-                // Invoice lookup
-                const inv = invoices.find((i) => i.reservationId === res.id);
-                const isPaid = inv?.isPaid ?? false;
-                const totalGross = inv?.totalGross ?? res.totalPrice ?? 85.0;
+            {/* 1. Zimmerbuchungen */}
+            {filteredReservations.map((res) => {
+              const isSelected = selectedType === 'reservation' && selectedResId === res.id;
+              const guest = res.guest || guests.find((g) => g.id === res.guestId);
+              const room = res.room || rooms.find((r) => r.id === res.roomId);
+              const guestFullName = `${guest?.firstName || ''} ${guest?.lastName || ''}`.trim() || res.last_name || 'Gast';
+              
+              // Alle Rechnungen zu dieser Buchung ermitteln
+              const resInvs = invoices.filter((i) => i.reservationId === res.id);
+              const hasInvs = resInvs.length > 0;
+              const totalGross = hasInvs 
+                ? resInvs.reduce((sum, i) => sum + (Number(i.totalGross) || 0), 0)
+                : (res.totalPrice || 85.0);
+              
+              const isFullyPaid = hasInvs && resInvs.every((i) => i.isPaid);
+              const isPartiallyPaid = hasInvs && !isFullyPaid && resInvs.some((i) => i.isPaid);
 
-                return (
-                  <div
-                    key={res.id}
-                    onClick={() => setSelectedResId(res.id)}
-                    className={`p-2.5 cursor-pointer transition-colors border-l-4 ${
-                      isSelected
-                        ? 'bg-blue-50 border-blue-600 shadow-inner'
-                        : 'border-transparent hover:bg-slate-50'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded font-mono ${
-                          isSelected ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-800'
-                        }`}>
-                          {room?.name || `Zimmer ${res.roomId}`}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-mono">
-                          #{res.reservationNumber || res.id}
-                        </span>
-                      </div>
-                      <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded flex items-center gap-0.5 ${
-                        isPaid
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-amber-100 text-amber-800'
+              return (
+                <div
+                  key={`res-${res.id}`}
+                  onClick={() => {
+                    setSelectedType('reservation');
+                    setSelectedResId(res.id);
+                    setSelectedFreeInvId(null);
+                    if (resInvs.length > 0) {
+                      setActiveInvoiceId(resInvs[0].id);
+                    }
+                  }}
+                  className={`p-2.5 cursor-pointer transition-colors border-l-4 ${
+                    isSelected
+                      ? 'bg-[#ebf2f8] border-[#376189] shadow-inner'
+                      : 'border-transparent hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-[11px] font-bold px-1.5 py-0.2 rounded font-mono ${
+                        isSelected ? 'bg-[#376189] text-white' : 'bg-slate-200 text-slate-800'
                       }`}>
-                        {isPaid ? (
-                          <>
-                            <Check className="w-2.5 h-2.5" />
-                            <span>Bezahlt</span>
-                          </>
-                        ) : (
+                        {room?.name || `Zimmer ${res.roomId}`}
+                      </span>
+                      <span className="text-[10px] text-slate-500 font-mono">
+                        #{res.reservationNumber || res.id}
+                      </span>
+                      {resInvs.length > 1 && (
+                        <span className="text-[9px] bg-[#dce8f3] text-[#1d3349] font-bold px-1.5 py-0.2 rounded border border-[#c4d8ea]">
+                          {resInvs.length} Rechnungen
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Ampel-Status Badge: Grün = Bezahlt, Gelber Punkt = Teilbezahlt, Rot = Offen */}
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1.5 border shadow-2xs ${
+                      isFullyPaid
+                        ? 'bg-[#edf6f1] text-[#285740] border-[#b7dec9]'
+                        : isPartiallyPaid
+                        ? 'bg-[#fcf3e6] text-[#8c5820] border-[#eed19a] ring-1 ring-[#eed19a]/60'
+                        : 'bg-[#faeded] text-[#852828] border-[#ecc2c2]'
+                    }`}>
+                      {isFullyPaid ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-[#2ea36f] border border-[#268a5d] shadow-xs shrink-0 inline-block" />
+                          <span>Bezahlt</span>
+                        </>
+                      ) : isPartiallyPaid ? (
+                        <>
+                          {/* Ampel: Gelber visueller Punkt */}
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#d4973b] border border-[#b06a1f] shadow-xs shrink-0 inline-block animate-pulse" />
+                          <span className="font-extrabold text-[#8c5820]">Teilbezahlt</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-[#bd4343] border border-[#a33737] shadow-xs shrink-0 inline-block" />
                           <span>Offen</span>
-                        )}
-                      </span>
-                    </div>
-
-                    <div className="font-bold text-slate-900 text-xs truncate">
-                      {guestFullName}
-                      {guest?.name2 && <span className="text-slate-500 font-normal"> ({guest.name2})</span>}
-                    </div>
-
-                    <div className="flex items-center justify-between text-[11px] text-slate-600 mt-1">
-                      <span className="font-mono">
-                        {res.arrivalDate} bis {res.departureDate} ({res.nights} Ü)
-                      </span>
-                      <span className="font-bold font-mono text-slate-900 text-xs">
-                        {totalGross.toFixed(2)} €
-                      </span>
-                    </div>
+                        </>
+                      )}
+                    </span>
                   </div>
-                );
-              })
+
+                  <div className="font-bold text-slate-900 text-xs truncate">
+                    {guestFullName}
+                    {guest?.name2 && <span className="text-slate-500 font-normal"> ({guest.name2})</span>}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 mt-1">
+                    <span className="font-mono">
+                      {res.arrivalDate} bis {res.departureDate} ({res.nights} Ü)
+                    </span>
+                    <span className="font-bold font-mono text-slate-900 text-xs">
+                      {totalGross.toFixed(2)} €
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* 2. Freie Kassenrechnungen */}
+            {filteredFreeInvoices.length > 0 && (
+              <div className="bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between border-y border-slate-200">
+                <span className="flex items-center gap-1">
+                  <Receipt className="w-3 h-3 text-purple-600" />
+                  <span>Freie Kassenbelege</span>
+                </span>
+                <span>{filteredFreeInvoices.length}</span>
+              </div>
+            )}
+
+            {filteredFreeInvoices.map((inv) => {
+              const isSelected = selectedType === 'freeInvoice' && selectedFreeInvId === inv.id;
+              return (
+                <div
+                  key={`free-${inv.id}`}
+                  onClick={() => {
+                    setSelectedType('freeInvoice');
+                    setSelectedFreeInvId(inv.id);
+                    setSelectedResId(null);
+                    setActiveInvoiceId(inv.id);
+                    setCurrentInvoice(inv);
+                  }}
+                  className={`p-2.5 cursor-pointer transition-colors border-l-4 ${
+                    isSelected
+                      ? 'bg-purple-50 border-purple-600 shadow-inner'
+                      : 'border-transparent hover:bg-slate-50'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-bold px-1.5 py-0.2 rounded font-mono bg-purple-100 text-purple-900 border border-purple-200">
+                        KASSE
+                      </span>
+                      <span className="text-[10px] text-slate-600 font-mono font-bold">
+                        {inv.invoiceNumber}
+                      </span>
+                    </div>
+
+                    <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded flex items-center gap-0.5 ${
+                      inv.isPaid
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : 'bg-amber-100 text-amber-800'
+                    }`}>
+                      {inv.isPaid ? 'Bezahlt' : 'Offen'}
+                    </span>
+                  </div>
+
+                  <div className="font-bold text-slate-900 text-xs truncate">
+                    {inv.recipientName || 'Barverkauf'}
+                    {inv.recipientCompany && <span className="text-slate-500 font-normal"> ({inv.recipientCompany})</span>}
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-600 mt-1">
+                    <span className="font-mono text-slate-500">{inv.invoiceDate}</span>
+                    <span className="font-bold font-mono text-purple-950 text-xs">
+                      {inv.totalGross.toFixed(2)} €
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+
+            {filteredReservations.length === 0 && filteredFreeInvoices.length === 0 && (
+              <div className="p-8 text-center text-slate-400 italic text-xs">
+                Keine passenden Vorgänge oder Rechnungen gefunden.
+              </div>
             )}
           </div>
 
@@ -476,14 +814,14 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         {/* RECHTE SPALTE: RECHNUNGS-ZENTRALE & PDF-VORSCHAU (DETAIL) */}
         <div className="flex-1 flex flex-col min-h-0 bg-slate-100 overflow-hidden">
           
-          {/* UMSCHALT-LEISTE OBEN */}
+          {/* UMSCHALT- & AKTIONSLEISTE OBEN */}
           <div className="bg-white border-b border-slate-300 px-3 py-2 flex items-center justify-between shrink-0 shadow-xs">
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setViewMode('edit')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'edit'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#376189] text-white shadow-xs'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
                 }`}
               >
@@ -495,7 +833,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                 onClick={() => setViewMode('pdf')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-bold transition-all cursor-pointer ${
                   viewMode === 'pdf'
-                    ? 'bg-blue-600 text-white shadow-xs'
+                    ? 'bg-[#376189] text-white shadow-xs'
                     : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300'
                 }`}
               >
@@ -510,13 +848,23 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                 className="flex items-center gap-1 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 px-2.5 py-1 rounded text-xs font-semibold cursor-pointer shadow-xs"
                 title="Position hinzufügen (F7)"
               >
-                <Plus className="w-3.5 h-3.5 text-blue-600" />
+                <Plus className="w-3.5 h-3.5 text-[#376189]" />
                 <span>Position hinzufügen</span>
+              </button>
+
+              {/* NEUER BUTTON: WEITERE RECHNUNG SCHREIBEN */}
+              <button
+                onClick={handleCreateAdditional}
+                className="flex items-center gap-1 bg-[#eef3f7] hover:bg-[#e1eaf1] border border-[#a8c0d6] text-[#2c4f70] px-2.5 py-1 rounded text-xs font-bold cursor-pointer shadow-xs transition-colors"
+                title="Weitere Rechnung zu diesem Vorgang anlegen (z. B. Zweitrechnung / Folio B) [F8]"
+              >
+                <FilePlus2 className="w-3.5 h-3.5 text-[#376189]" />
+                <span>+ Weitere Rechnung schreiben</span>
               </button>
 
               <button
                 onClick={handleSave}
-                className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded text-xs font-bold cursor-pointer shadow-xs transition-colors"
+                className="flex items-center gap-1 bg-[#397356] hover:bg-[#2c5b44] text-white px-3 py-1 rounded text-xs font-bold cursor-pointer shadow-xs transition-colors"
                 title="Rechnung speichern (F9)"
               >
                 <Save className="w-3.5 h-3.5" />
@@ -525,10 +873,138 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
             </div>
           </div>
 
+          {/* FOLIO-TABS: MEHRERE RECHNUNGEN ZU EINER BUCHUNG (WENN VORHANDEN ODER ERSTELLT) */}
+          {selectedType === 'reservation' && (
+            <div className="bg-slate-200 px-3 pt-2 border-b border-slate-300 flex items-center justify-between overflow-x-auto shrink-0">
+              <div className="flex items-center gap-1.5">
+                {/* Fallback-Tab, falls noch keine Rechnung im Server gespeichert ist */}
+                {bookingInvoices.length === 0 && currentInvoice && (
+                  <button
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-t text-xs font-bold border-t border-x bg-white text-[#1b2b3d] border-slate-300 shadow-xs -mb-[1px] z-10"
+                  >
+                    <FileText className="w-3.5 h-3.5 text-[#376189]" />
+                    <span>Rechnung 1: {currentInvoice.invoiceNumber}</span>
+                    <span className="font-mono text-[11px] bg-slate-200 px-1.5 py-0.2 rounded">
+                      {currentInvoice.totalGross.toFixed(2)} €
+                    </span>
+                  </button>
+                )}
+
+                {/* Echte gespeicherte Rechnungen */}
+                {bookingInvoices.map((inv, idx) => {
+                  const isCurrent = currentInvoice?.id === inv.id;
+                  return (
+                    <div key={inv.id} className="flex items-center">
+                      <button
+                        onClick={() => {
+                          setActiveInvoiceId(inv.id);
+                          setCurrentInvoice(inv);
+                        }}
+                        className={`flex items-center gap-2 px-3 py-1.5 rounded-t text-xs font-bold transition-all border-t border-x cursor-pointer ${
+                          isCurrent
+                            ? 'bg-white text-[#1b2b3d] border-slate-300 shadow-xs -mb-[1px] z-10'
+                            : 'bg-slate-100 text-slate-600 border-slate-300/80 hover:bg-slate-50'
+                        }`}
+                      >
+                        <FileText className={`w-3.5 h-3.5 ${isCurrent ? 'text-[#376189]' : 'text-slate-400'}`} />
+                        <span>Rechnung {idx + 1} ({inv.invoiceNumber})</span>
+                        <span className="font-mono text-[11px] bg-slate-200/90 px-1.5 py-0.2 rounded text-slate-800">
+                          {inv.totalGross.toFixed(2)} €
+                        </span>
+                        <span className={`text-[9px] px-1 py-0.2 rounded font-bold ${
+                          inv.isPaid ? 'bg-[#edf6f1] text-[#285740]' : 'bg-[#fcf3e6] text-[#8c5820]'
+                        }`}>
+                          {inv.isPaid ? 'Bezahlt' : 'Offen'}
+                        </span>
+                        
+                        {/* Zweitrechnung löschen können, wenn >1 Rechnung vorhanden */}
+                        {bookingInvoices.length > 1 && idx > 0 && !inv.isPaid && (
+                          <span
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteSpecificInvoice(inv.id);
+                            }}
+                            className="text-slate-400 hover:text-rose-600 p-0.5 rounded hover:bg-rose-50 cursor-pointer ml-1"
+                            title="Diese Zweitrechnung löschen"
+                          >
+                            <X className="w-3 h-3" />
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+
+                {/* Schnell-Tab für weitere Rechnung */}
+                <button
+                  onClick={handleCreateAdditional}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs text-blue-700 hover:bg-white/80 rounded-t border border-dashed border-blue-400 font-semibold cursor-pointer mb-0.5 ml-1 transition-colors"
+                  title="Weitere Rechnung für diesen Gast / diese Buchung hinzufügen"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Neue Rechnung</span>
+                </button>
+              </div>
+
+              {bookingInvoices.length > 1 && (
+                <div className="text-[10px] text-slate-600 font-mono pb-1 flex items-center gap-2">
+                  {bookingInvoices.some((i) => i.isPaid) && !bookingInvoices.every((i) => i.isPaid) ? (
+                    <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-950 border border-amber-300 font-bold px-2 py-0.5 rounded shadow-xs">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-400 border border-amber-600 shadow-xs inline-block animate-pulse" />
+                      <span>Teilbezahlt</span>
+                    </span>
+                  ) : bookingInvoices.every((i) => i.isPaid) ? (
+                    <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold px-2 py-0.5 rounded shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-xs inline-block" />
+                      <span>Vollständig bezahlt</span>
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 bg-rose-50 text-rose-800 border border-rose-300 font-bold px-2 py-0.5 rounded shadow-xs">
+                      <span className="w-2 h-2 rounded-full bg-rose-500 shadow-xs inline-block" />
+                      <span>Offen</span>
+                    </span>
+                  )}
+                  <span>Folio-Split: <strong>{bookingInvoices.length} Rechnungen</strong></span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB BEI FREIER RECHNUNG */}
+          {selectedType === 'freeInvoice' && currentInvoice && (
+            <div className="bg-slate-200 px-3 pt-2 border-b border-slate-300 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t text-xs font-bold border-t border-x bg-white text-purple-900 border-slate-300 shadow-xs -mb-[1px] z-10">
+                  <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                  <span>Kassenbeleg: {currentInvoice.invoiceNumber}</span>
+                  <span className="font-mono text-[11px] bg-purple-100 text-purple-900 px-1.5 py-0.2 rounded">
+                    {currentInvoice.totalGross.toFixed(2)} €
+                  </span>
+                </div>
+                <button
+                  onClick={handleCreateFree}
+                  className="flex items-center gap-1 px-2.5 py-1 text-xs text-purple-700 hover:bg-white/80 rounded-t border border-dashed border-purple-400 font-semibold cursor-pointer mb-0.5 ml-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>+ Weiterer Kassenbeleg</span>
+                </button>
+              </div>
+
+              <button
+                onClick={handleDeleteCurrentInvoice}
+                className="text-[11px] text-rose-600 hover:text-rose-800 pb-1 cursor-pointer flex items-center gap-1"
+                title="Diesen Kassenbeleg stornieren / löschen"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Beleg stornieren</span>
+              </button>
+            </div>
+          )}
+
           {/* INHALT DER RECHTEN SPALTE: EDIT-MODUS ODER PDF-VORSCHAU */}
           {!currentInvoice ? (
             <div className="flex-1 flex items-center justify-center p-8 text-slate-400 italic text-sm">
-              Wählen Sie links eine Buchung aus, um die Rechnung anzuzeigen.
+              Wählen Sie links einen Vorgang oder erstellen Sie eine freie Rechnung.
             </div>
           ) : viewMode === 'pdf' ? (
             /* MODUS 1: DIN A4 PDF VORSCHAU */
@@ -550,7 +1026,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                 <div className="col-span-12 md:col-span-7 flex flex-col gap-2.5 border-b md:border-b-0 md:border-r border-slate-200 pb-3 md:pb-0 md:pr-3">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-blue-600" />
+                      <User className="w-3.5 h-3.5 text-[#376189]" />
                       <span>Rechnungsempfänger & Anschrift</span>
                     </span>
                     <span className="text-[10px] text-slate-400">DIN 5008 Adressfeld</span>
@@ -672,7 +1148,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                 {/* Spalte 8-12: Rechnungs-Kopfdaten */}
                 <div className="col-span-12 md:col-span-5 flex flex-col gap-2.5">
                   <span className="font-bold text-slate-800 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-blue-600" />
+                    <Calendar className="w-3.5 h-3.5 text-[#376189]" />
                     <span>Rechnungs-Stammdaten</span>
                   </span>
 
@@ -709,10 +1185,10 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                       </label>
                       <input
                         type="number"
-                        min="1"
-                        value={currentInvoice.nights || 1}
+                        min="0"
+                        value={currentInvoice.nights || 0}
                         onChange={(e) => {
-                          const n = Math.max(1, Number(e.target.value) || 1);
+                          const n = Math.max(0, Number(e.target.value) || 0);
                           setCurrentInvoice({ ...currentInvoice, nights: n });
                         }}
                         className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-blue-800"
@@ -725,9 +1201,9 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                       </label>
                       <input
                         type="text"
-                        readOnly
                         value={currentInvoice.roomName || ''}
-                        className="bg-slate-100 border border-slate-200 rounded px-2 py-1 text-xs text-slate-600 font-semibold"
+                        onChange={(e) => setCurrentInvoice({ ...currentInvoice, roomName: e.target.value })}
+                        className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs text-slate-700 font-semibold"
                       />
                     </div>
                   </div>
@@ -780,7 +1256,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                   </div>
 
                   {/* Schnell-Presets zum Einfügen */}
-                  <div className="flex items-center gap-1.5 text-[11px]">
+                  <div className="flex items-center gap-1.5 text-[11px] flex-wrap">
                     <span className="text-slate-500 text-[10px]">Schnellposten:</span>
                     <button
                       onClick={() => handleAddItem({ desc: 'Parkplatz', price: 5.00, taxRate: 0.19 })}
@@ -800,6 +1276,12 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                     >
                       + Gästetaxe Jonsdorf
                     </button>
+                    <button
+                      onClick={() => handleAddItem({ desc: 'Zusatz-Frühstücksbuffet', price: 12.00, taxRate: 0.19 })}
+                      className="px-2 py-0.5 bg-white hover:bg-slate-50 border border-slate-300 rounded text-slate-700 cursor-pointer"
+                    >
+                      + Frühstück (12€)
+                    </button>
                   </div>
                 </div>
 
@@ -814,75 +1296,120 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                         <th className="py-1.5 px-2 w-28 text-right">Einzelpreis (€)</th>
                         <th className="py-1.5 px-2 w-28 text-center">USt-Satz</th>
                         <th className="py-1.5 px-2 w-28 text-right">Gesamt (€)</th>
-                        <th className="py-1.5 px-2 w-12 text-center">Aktion</th>
+                        <th className="py-1.5 px-2 w-20 text-center">Aktion</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {(currentInvoice.items || []).map((item, idx) => (
-                        <tr key={item.id || idx} className="hover:bg-slate-50/70">
-                          <td className="py-1.5 px-2 text-center font-mono text-slate-400 text-[11px]">
-                            {idx + 1}
-                          </td>
-                          <td className="py-1.5 px-2">
-                            <input
-                              type="text"
-                              value={item.description}
-                              onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
-                              className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-medium text-slate-800"
-                            />
-                            <input
-                              type="text"
-                              placeholder="Zusatzinfo (optional)..."
-                              value={item.infoNote || ''}
-                              onChange={(e) => handleItemChange(idx, 'infoNote', e.target.value)}
-                              className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-[10px] text-slate-500 mt-0.5 italic"
-                            />
-                          </td>
-                          <td className="py-1.5 px-2 text-center">
-                            <input
-                              type="number"
-                              min="0"
-                              step="any"
-                              value={item.quantity}
-                              onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
-                              className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 text-xs text-center font-mono font-bold"
-                            />
-                          </td>
-                          <td className="py-1.5 px-2 text-right">
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.unitPriceGross}
-                              onChange={(e) => handleItemChange(idx, 'unitPriceGross', e.target.value)}
-                              className="w-24 bg-white border border-slate-300 rounded px-1.5 py-1 text-xs text-right font-mono"
-                            />
-                          </td>
-                          <td className="py-1.5 px-2 text-center">
-                            <select
-                              value={item.taxRate}
-                              onChange={(e) => handleItemChange(idx, 'taxRate', Number(e.target.value))}
-                              className="bg-white border border-slate-300 rounded px-1.5 py-1 text-xs font-mono font-semibold"
-                            >
-                              <option value={0.07}>7 % (Logis)</option>
-                              <option value={0.19}>19 % (Service)</option>
-                              <option value={0.00}>0 % (Gästetaxe)</option>
-                            </select>
-                          </td>
-                          <td className="py-1.5 px-2 text-right font-mono font-bold text-slate-900 text-xs">
-                            {(Number(item.totalGross) || 0).toFixed(2)} €
-                          </td>
-                          <td className="py-1.5 px-2 text-center">
-                            <button
-                              onClick={() => handleRemoveItem(idx)}
-                              className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 cursor-pointer"
-                              title="Position löschen"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                      {(currentInvoice.items || []).map((item, idx) => {
+                        const otherInvoices = bookingInvoices.filter((i) => i.id !== currentInvoice.id);
+                        return (
+                          <tr key={item.id || idx} className="hover:bg-slate-50/70">
+                            <td className="py-1.5 px-2 text-center font-mono text-slate-400 text-[11px]">
+                              {idx + 1}
+                            </td>
+                            <td className="py-1.5 px-2">
+                              <input
+                                type="text"
+                                value={item.description}
+                                onChange={(e) => handleItemChange(idx, 'description', e.target.value)}
+                                className="w-full bg-white border border-slate-300 rounded px-2 py-1 text-xs font-medium text-slate-800"
+                              />
+                              <input
+                                type="text"
+                                placeholder="Zusatzinfo (optional)..."
+                                value={item.infoNote || ''}
+                                onChange={(e) => handleItemChange(idx, 'infoNote', e.target.value)}
+                                className="w-full bg-slate-50 border border-slate-200 rounded px-2 py-0.5 text-[10px] text-slate-500 mt-0.5 italic"
+                              />
+                            </td>
+                            <td className="py-1.5 px-2 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                step="any"
+                                value={item.quantity}
+                                onChange={(e) => handleItemChange(idx, 'quantity', e.target.value)}
+                                className="w-16 bg-white border border-slate-300 rounded px-1.5 py-1 text-xs text-center font-mono font-bold"
+                              />
+                            </td>
+                            <td className="py-1.5 px-2 text-right">
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.unitPriceGross}
+                                onChange={(e) => handleItemChange(idx, 'unitPriceGross', e.target.value)}
+                                className="w-24 bg-white border border-slate-300 rounded px-1.5 py-1 text-xs text-right font-mono"
+                              />
+                            </td>
+                            <td className="py-1.5 px-2 text-center">
+                              <select
+                                value={item.taxRate}
+                                onChange={(e) => handleItemChange(idx, 'taxRate', Number(e.target.value))}
+                                className="bg-white border border-slate-300 rounded px-1.5 py-1 text-xs font-mono font-semibold"
+                              >
+                                <option value={0.07}>7 % (Logis)</option>
+                                <option value={0.19}>19 % (Service)</option>
+                                <option value={0.00}>0 % (Gästetaxe)</option>
+                              </select>
+                            </td>
+                            <td className="py-1.5 px-2 text-right font-mono font-bold text-slate-900 text-xs">
+                              {(Number(item.totalGross) || 0).toFixed(2)} €
+                            </td>
+                            <td className="py-1.5 px-2 text-center">
+                              <div className="flex items-center justify-center gap-1 relative">
+                                {/* Folio-Transfer-Button: Wenn mehrere Rechnungen für die Buchung existieren */}
+                                {otherInvoices.length > 0 && (
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        if (otherInvoices.length === 1) {
+                                          handleMoveItemToInvoice(idx, otherInvoices[0].id);
+                                        } else {
+                                          setMoveDropdownPosIdx(moveDropdownPosIdx === idx ? null : idx);
+                                        }
+                                      }}
+                                      className="text-[#376189] hover:text-[#203c58] p-1 rounded hover:bg-[#eef3f7] cursor-pointer"
+                                      title={otherInvoices.length === 1 
+                                        ? `Auf Rechnung ${otherInvoices[0].invoiceNumber} verschieben` 
+                                        : 'Auf andere Rechnung verschieben (Folio-Split)'}
+                                    >
+                                      <ArrowRightLeft className="w-3.5 h-3.5" />
+                                    </button>
+
+                                    {/* Dropdown-Menü, falls mehr als 2 Rechnungen existieren */}
+                                    {moveDropdownPosIdx === idx && otherInvoices.length > 1 && (
+                                      <div className="absolute right-0 top-full mt-1 bg-white border border-slate-300 shadow-xl rounded z-40 p-1 text-[11px] min-w-36 flex flex-col gap-0.5">
+                                        <span className="text-[10px] text-slate-400 px-1 font-semibold text-left">
+                                          Verschieben nach:
+                                        </span>
+                                        {otherInvoices.map((targetInv, tIdx) => (
+                                          <button
+                                            key={targetInv.id}
+                                            onClick={() => handleMoveItemToInvoice(idx, targetInv.id)}
+                                            className="text-left px-2 py-1 hover:bg-blue-50 text-slate-700 rounded cursor-pointer truncate"
+                                          >
+                                            Rechnung {tIdx + 2}: {targetInv.invoiceNumber}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+
+                                <button
+                                  onClick={() => handleRemoveItem(idx)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded hover:bg-rose-50 cursor-pointer"
+                                  title="Position löschen"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -907,7 +1434,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                     <span className="text-sm font-bold text-slate-800">
                       Rechnungsbetrag Brutto:
                     </span>
-                    <span className="text-base font-extrabold text-blue-900 bg-blue-50 px-3 py-1 rounded border border-blue-200">
+                    <span className="text-base font-extrabold text-[#1b2b3d] bg-[#eef3f7] px-3 py-1 rounded border border-[#ccdbe8]">
                       {currentInvoice.totalGross.toFixed(2)} €
                     </span>
                   </div>
@@ -923,7 +1450,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                   </span>
                   <button
                     onClick={() => setCurrentInvoice({ ...currentInvoice, closingText: DEFAULT_CLOSING_TEXT })}
-                    className="text-[10px] text-blue-600 hover:underline cursor-pointer"
+                    className="text-[10px] text-[#376189] hover:underline cursor-pointer"
                   >
                     Standardtext wiederherstellen
                   </button>
@@ -984,12 +1511,13 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
         }}
         selectLabel="[F6] PDF Drucken / Vorschau"
         onNew={() => handleAddItem()}
-        onCopy={() => setXmlPreviewOpen(true)}
+        onCopy={handleCreateAdditional}
         canCopy={true}
         onEdit={handleSave}
         canEdit={true}
         editLabel="[F9] Speichern"
-        canDelete={false}
+        canDelete={Boolean(currentInvoice && (!currentInvoice.reservationId || bookingInvoices.length > 1))}
+        onDelete={handleDeleteCurrentInvoice}
       />
 
       {/* MODAL: ZUGFeRD 2.0 / Factur-X XML VORSCHAU */}
@@ -1021,7 +1549,7 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
               </span>
               <button
                 onClick={() => setXmlPreviewOpen(false)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded font-bold cursor-pointer"
+                className="bg-[#376189] hover:bg-[#2c4f70] text-white px-3 py-1 rounded font-bold cursor-pointer"
               >
                 Schließen [Esc]
               </button>
