@@ -22,7 +22,7 @@ export interface Guest {
   idCardNumber?: string;
   paymentMethod?: string;
   isRegularGuest: boolean;
-  isTaxExempt: boolean;
+  isTaxExempt?: boolean;
   taxExemptReason?: string;
   remarks?: string;
   guestInfo?: string;
@@ -66,6 +66,7 @@ export interface Reservation {
   boardType?: 'Frühstück' | 'OHP' | '2Gang' | '3Gang' | string;
   hasBreakfast: boolean;
   breakfastCount: number;
+  breakfastDays?: number;
   ohpCount?: number;
   twoGangCount?: number;
   threeGangCount?: number;
@@ -86,6 +87,41 @@ export interface Reservation {
   room_name?: string;
 }
 
+export interface BoardOption {
+  id: string;
+  label: string;
+  description: string;
+}
+
+export const BOARD_OPTIONS: BoardOption[] = [
+  { id: 'Frühstück', label: 'Frühstück', description: 'Frühstücksbuffet' },
+  { id: 'OHP', label: 'OHP', description: 'Ohne Halbpension' },
+  { id: '2Gang', label: '2Gang', description: '2-Gang Menü (HP)' },
+  { id: '3Gang', label: '3Gang', description: '3-Gang Menü (HP)' },
+];
+
+export function parseBoardTypes(raw?: string | null): string[] {
+  if (!raw) return [];
+  const parts = raw.split(/[,;+/]+/).map((s) => s.trim()).filter(Boolean);
+  const result: string[] = [];
+
+  for (const part of parts) {
+    if (part === 'Frühstück' || part.toLowerCase().includes('frühstück') || part.toLowerCase().includes('buffet')) {
+      if (!result.includes('Frühstück')) result.push('Frühstück');
+    } else if (part === 'OHP' || part.toUpperCase().includes('OHP')) {
+      if (!result.includes('OHP')) result.push('OHP');
+    } else if (part === '2Gang' || part.includes('2 Gang') || part.includes('2-Gang') || part.includes('2Gang')) {
+      if (!result.includes('2Gang')) result.push('2Gang');
+    } else if (part === '3Gang' || part.includes('3 Gang') || part.includes('3-Gang') || part.includes('3Gang')) {
+      if (!result.includes('3Gang')) result.push('3Gang');
+    } else if (!result.includes(part)) {
+      result.push(part);
+    }
+  }
+
+  return result;
+}
+
 export interface Salutation {
   id: number;
   salutationNumber: number;
@@ -100,6 +136,9 @@ export interface PriceVariant {
   name: string;
   shortCode: string;
   isFlatRate: boolean;
+  breakfastPersons?: number;
+  breakfastRate?: number;
+  isOnlineImport?: boolean;
 }
 
 export interface Invoice {
@@ -132,7 +171,7 @@ export interface Invoice {
   taxLodging: number;
   netService: number;
   taxService: number;
-  cityTaxAmount: number;
+  cityTaxAmount?: number;
   totalGross: number;
   
   // Texte & Konditionen
@@ -141,9 +180,16 @@ export interface Invoice {
   isPaid: boolean;
   status: string;
   
-  // TSE & Fiskalisierung
+  // TSE & Fiskalisierung (fiskaly SIGN DE API v2 / KassenSichV)
   tseTransactionId?: string;
+  tseTransactionNumber?: number;
   tseSignature?: string;
+  tseSignatureCounter?: number;
+  tseSignatureAlgorithm?: string;
+  tseSerialNumber?: string;
+  tseTimestamp?: string;
+  tseQrCodeData?: string;
+  tseOfflineFallback?: boolean;
   
   // Joins
   guest?: Guest;

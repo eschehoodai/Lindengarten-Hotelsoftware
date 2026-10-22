@@ -9,6 +9,8 @@ interface HeaderProps {
   serverStatus: 'online' | 'offline';
   onRefresh: () => void;
   isLoading: boolean;
+  lanConnected?: boolean;
+  lanClientsCount?: number;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -17,6 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
   serverStatus,
   onRefresh,
   isLoading,
+  lanConnected = false,
+  lanClientsCount,
 }) => {
   const [currentTime, setCurrentTime] = useState<string>('');
 
@@ -45,7 +49,7 @@ export const Header: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-2.5">
         <div className="flex items-center gap-1.5 bg-[#397356]/30 border border-[#48bc89]/40 px-2 py-0.5 rounded text-xs font-semibold text-[#86d4b1]">
           <Building2 className="w-3.5 h-3.5 text-[#48bc89]" />
-          <span>Hotel Lindengarten</span>
+          <span>Romantik Hotel Zum Lindengarten</span>
         </div>
         <span className="text-[11px] text-slate-400 font-mono hidden xl:inline">
           ELAN Web-Desktop v2.0
@@ -133,15 +137,22 @@ export const Header: React.FC<HeaderProps> = ({
           {currentTime || '10. Okt 2026 15:00'}
         </span>
 
-        {/* LAN DB Status */}
-        <div className="flex items-center gap-1.5 bg-slate-900/70 px-2 py-0.5 rounded border border-slate-700">
+        {/* LAN DB Status & Echtzeit-Sync */}
+        <div 
+          className="flex items-center gap-1.5 bg-slate-900/70 px-2 py-0.5 rounded border border-slate-700"
+          title={lanConnected ? `Echtzeit-Synchronisation aktiv (${lanClientsCount || 2} Rezeptions-PCs im LAN verbunden)` : 'Verbindung getrennt'}
+        >
           <span
             className={`w-2 h-2 rounded-full ${
-              serverStatus === 'online' ? 'bg-[#2ea36f] animate-pulse' : 'bg-[#bd4343]'
+              serverStatus === 'online' && lanConnected
+                ? 'bg-[#2ea36f] animate-pulse shadow-xs shadow-emerald-500/50'
+                : serverStatus === 'online'
+                ? 'bg-[#d4973b]'
+                : 'bg-[#bd4343]'
             }`}
           />
-          <span className="text-[11px] text-slate-300">
-            {serverStatus === 'online' ? 'LAN-DB Online' : 'Offline'}
+          <span className="text-[11px] text-slate-300 font-sans">
+            {serverStatus === 'online' && lanConnected ? 'LAN-Sync Aktiv' : serverStatus === 'online' ? 'LAN-DB' : 'Offline'}
           </span>
         </div>
 

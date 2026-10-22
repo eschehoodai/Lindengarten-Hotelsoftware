@@ -1,11 +1,14 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Reservation, Room, Guest, PriceVariant, Invoice } from '../../types';
+import { BOARD_OPTIONS, parseBoardTypes } from '../../types';
 import { ActionBar } from '../ActionBar';
 import { ReservationDialog } from '../dialogs/ReservationDialog';
 import { StatusDialog } from '../dialogs/StatusDialog';
+import { ConfirmDialog } from '../dialogs/ConfirmDialog';
+import { MeldescheinPdfDocument } from '../pdf/MeldescheinPdfDocument';
 import { 
   Calendar, DoorClosed, Users, Clock, Lock, Unlock, 
-  CheckCircle2, Search, Filter, Key, Coffee, FileText, AlertCircle 
+  CheckCircle2, Search, Filter, Key, Coffee, FileText, AlertCircle, Utensils 
 } from 'lucide-react';
 
 interface ReservationsViewProps {
@@ -30,6 +33,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
 }) => {
   const [selectedId, setSelectedId] = useState<number | null>(reservations[0]?.id || null);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [resToDelete, setResToDelete] = useState<Reservation | null>(null);
 
   // Schnelle O(1) Lookup-Map für Rechnungen je Reservierung (unterstützt Folio-Splits)
   const invoicesByReservation = useMemo(() => {
@@ -57,6 +61,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
   const [isEditOpen, setIsEditOpen] = useState<boolean>(false);
   const [isStatusOpen, setIsStatusOpen] = useState<boolean>(false);
   const [editingReservation, setEditingReservation] = useState<Partial<Reservation> | null>(null);
+  const [meldescheinRes, setMeldescheinRes] = useState<Reservation | null>(null);
 
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -101,9 +106,21 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
   }, [reservations, searchQuery, filterMode, todayStr]);
 
   // Keyboard navigation
+  const handleDelete = () => {
+    if (!selectedRes) return;
+    setResToDelete(selectedRes);
+  };
+
+  const confirmDelete = async () => {
+    if (!resToDelete) return;
+    const targetId = resToDelete.id;
+    setResToDelete(null);
+    await onDeleteReservation(targetId);
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (isEditOpen || isStatusOpen) return;
+      if (isEditOpen || isStatusOpen || resToDelete) return;
 
       const currentIndex = filteredReservations.findIndex((r) => r.id === selectedId);
       if (e.key === 'ArrowDown') {
@@ -121,12 +138,15 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
         if (selectedRes) {
           setIsStatusOpen(true);
         }
+      } else if (e.key === 'Delete') {
+        e.preventDefault();
+        handleDelete();
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredReservations, selectedId, isEditOpen, isStatusOpen, selectedRes]);
+  }, [filteredReservations, selectedId, isEditOpen, isStatusOpen, selectedRes, resToDelete]);
 
   // Actions
   const handleOpenNew = () => {
@@ -151,16 +171,6 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
       isDeparted: false,
     });
     setIsEditOpen(true);
-  };
-
-  const handleDelete = async () => {
-    if (!selectedRes) return;
-    const confirm = window.confirm(
-      `Möchten Sie die Buchung ${selectedRes.reservationNumber} für "${selectedRes.guest?.lastName || selectedRes.last_name}" wirklich stornieren/löschen?`
-    );
-    if (confirm) {
-      await onDeleteReservation(selectedRes.id);
-    }
   };
 
   return (
@@ -409,6 +419,17 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {selectedRes && (
+              <button
+                type="button"
+                onClick={() => setMeldescheinRes(selectedRes)}
+                className="flex items-center gap-1.5 bg-[#376189] hover:bg-[#2c4f70] text-white px-2.5 py-0.5 rounded text-xs font-bold cursor-pointer transition-colors shadow-xs"
+                title="Amtlichen Meldeschein (§§ 29, 30 BMG) für diese Buchung drucken"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-300" />
+                <span>Meldeschein (DIN A4)</span>
+              </button>
+            )}
             <button
               onClick={() => setIsStatusOpen(true)}
               className="flex items-center gap-1 bg-[#eef3f7] hover:bg-[#e1eaf1] text-[#2c4f70] border border-[#a8c0d6] px-2.5 py-0.5 rounded text-xs font-bold cursor-pointer transition-colors"
@@ -420,109 +441,105 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
         </div>
 
         {selectedRes ? (
-          <div className="grid grid-cols-4 gap-3 text-xs flex-1">
+          <div className="grid grid-cols-4 gap-3.5 text-xs flex-1">
             {/* SPALTE 1: GASTINFO & MITREISENDE */}
-            <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
+            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between shadow-2xs">
               <div>
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Gastdaten</span>
-                <div className="font-bold text-slate-800 text-xs mt-0.5">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">GASTDATEN</span>
+                <div className="font-bold text-slate-900 text-xs md:text-[13px] mt-0.5">
                   {selectedRes.guest?.lastName || selectedRes.last_name}, {selectedRes.guest?.firstName || selectedRes.first_name}
                 </div>
-                <div className="text-[11px] text-slate-600">
+                <div className="text-xs text-slate-600 mt-0.5">
                   {selectedRes.guest?.street} {selectedRes.guest?.houseNumber}, {selectedRes.guest?.zipCode} {selectedRes.guest?.city}
                 </div>
                 {selectedRes.guest?.phone && (
-                  <div className="text-[11px] text-slate-500 mt-0.5 font-mono">
+                  <div className="text-xs text-slate-500 mt-0.5 font-mono">
                     Tel: {selectedRes.guest?.phone}
                   </div>
                 )}
               </div>
               {selectedRes.companionNames && (
-                <div className="text-[10px] text-[#2c4f70] bg-[#eef3f7] p-1 rounded border border-[#ccdbe8] mt-1">
+                <div className="text-[11px] text-[#2c4f70] bg-[#eef3f7] p-1.5 rounded border border-[#ccdbe8] mt-1 font-medium">
                   <strong>Mitreisende:</strong> {selectedRes.companionNames}
                 </div>
               )}
             </div>
 
             {/* SPALTE 2: REISEZEITRAUM & ZIMMER */}
-            <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
+            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between shadow-2xs">
               <div>
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Aufenthalt & Zimmer</span>
-                <div className="font-bold text-[#243c54] mt-0.5">
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">AUFENTHALT & ZIMMER</span>
+                <div className="font-bold text-[#243c54] text-xs md:text-[13px] mt-0.5">
                   Zimmer {selectedRes.room_code || selectedRoom?.roomCode}: {selectedRes.room_name || selectedRoom?.name}
                 </div>
-                <div className="font-mono text-[11px] text-slate-700 mt-1">
+                <div className="font-mono text-xs text-slate-800 font-bold mt-1">
                   {selectedRes.arrivalDate} → {selectedRes.departureDate}
                 </div>
-                <div className="text-[11px] font-semibold text-slate-600 mt-0.5">
+                <div className="text-xs font-semibold text-slate-700 mt-0.5">
                   {selectedRes.nights} Übernachtungen ({selectedRes.adultsCount} Erw., {selectedRes.childrenCount} Ki.)
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 text-[10px]">
+              <div className="flex items-center gap-1.5 text-xs mt-1">
                 {selectedRes.isLockedToRoom ? (
-                  <span className="flex items-center gap-1 text-amber-700 font-bold bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
-                    <Lock className="w-2.5 h-2.5" /> Fest gebucht (kein Umzug)
+                  <span className="flex items-center gap-1 text-amber-800 font-bold bg-amber-100 px-2 py-0.5 rounded border border-amber-300 text-[11px]">
+                    <Lock className="w-3 h-3 text-amber-700" /> Fest gebucht (kein Umzug)
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1 text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded">
-                    <Unlock className="w-2.5 h-2.5" /> Nicht Fest (verlegbar)
+                  <span className="flex items-center gap-1 text-slate-700 bg-slate-200 px-2 py-0.5 rounded text-[11px] font-medium">
+                    <Unlock className="w-3 h-3 text-slate-500" /> Nicht Fest (verlegbar)
                   </span>
                 )}
               </div>
             </div>
 
-            {/* SPALTE 3: VERPFLEGUNGSMATRIX */}
+            {/* SPALTE 3: VERPFLEGUNGSMATRIX (Personal-Info) */}
             {(() => {
-              const getBoard = (res: typeof selectedRes): 'Frühstück' | 'OHP' | '2Gang' | '3Gang' => {
-                if (res.boardType === 'OHP' || res.dailyArrangement?.toUpperCase().includes('OHP')) return 'OHP';
-                if (res.boardType === '3Gang' || res.dailyArrangement?.includes('3 Gang') || res.dailyArrangement?.includes('3Gang') || (res.threeGangCount && res.threeGangCount > 0)) return '3Gang';
-                if (res.boardType === '2Gang' || res.dailyArrangement?.includes('2 Gang') || res.dailyArrangement?.includes('2Gang') || (res.twoGangCount && res.twoGangCount > 0)) return '2Gang';
-                return 'Frühstück';
-              };
-              const resBoard = getBoard(selectedRes);
+              const activeTypes = parseBoardTypes(selectedRes.boardType || selectedRes.dailyArrangement);
               return (
-                <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
+                <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between shadow-2xs">
                   <div>
-                    <span className="text-[10px] text-slate-500 uppercase font-semibold flex items-center justify-between">
-                      <div className="flex items-center gap-1">
-                        <Coffee className="w-3 h-3 text-amber-600" />
-                        <span>Verpflegungsmatrix</span>
+                    <span className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center justify-between">
+                      <div className="flex items-center gap-1.5">
+                        <Utensils className="w-3.5 h-3.5 text-amber-600" />
+                        <span>VERPFLEGUNGSMATRIX (INFO)</span>
                       </div>
-                      <span className="font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.2 rounded text-[10px]">
-                        {resBoard}
+                      <span className="font-bold text-amber-900 bg-amber-100/90 px-2 py-0.2 rounded text-[11px]">
+                        {activeTypes.length > 0 ? `${activeTypes.length} aktiv` : 'Keine'}
                       </span>
                     </span>
-                    <div className="grid grid-cols-4 gap-1 text-center font-mono mt-1 text-[11px]">
-                      <div className={`p-1 rounded border transition-colors ${resBoard === 'Frühstück' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
-                        <div className="text-[9px] font-bold">Frühstück</div>
-                        <div>{selectedRes.breakfastCount || (resBoard === 'Frühstück' ? selectedRes.adultsCount : 0)}</div>
-                      </div>
-                      <div className={`p-1 rounded border transition-colors ${resBoard === 'OHP' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
-                        <div className="text-[9px] font-bold">OHP</div>
-                        <div>{selectedRes.ohpCount || (resBoard === 'OHP' ? selectedRes.adultsCount : 0)}</div>
-                      </div>
-                      <div className={`p-1 rounded border transition-colors ${resBoard === '2Gang' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
-                        <div className="text-[9px] font-bold">2Gang</div>
-                        <div>{selectedRes.twoGangCount || (resBoard === '2Gang' ? (selectedRes.dinnerCount || selectedRes.adultsCount) : 0)}</div>
-                      </div>
-                      <div className={`p-1 rounded border transition-colors ${resBoard === '3Gang' ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>
-                        <div className="text-[9px] font-bold">3Gang</div>
-                        <div>{selectedRes.threeGangCount || (resBoard === '3Gang' ? (selectedRes.dinnerCount || selectedRes.adultsCount) : 0)}</div>
-                      </div>
+                    <div className="grid grid-cols-4 gap-1 text-center font-sans mt-1.5 text-xs">
+                      {BOARD_OPTIONS.map((opt) => {
+                        const isActive = activeTypes.includes(opt.id);
+                        return (
+                          <div
+                            key={opt.id}
+                            className={`p-1 rounded border transition-all flex flex-col items-center justify-center ${
+                              isActive
+                                ? 'bg-amber-100/90 border-amber-300 font-bold text-amber-950 shadow-2xs'
+                                : 'bg-slate-100/60 border-slate-200 text-slate-400'
+                            }`}
+                          >
+                            <div className="text-[10px] font-bold">{opt.label}</div>
+                            <div className="text-[10px] font-semibold">{isActive ? '✓ Ja' : '–'}</div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
-                  <div className="text-[10px] text-slate-700 border-t border-slate-200 pt-1 flex items-center justify-between">
-                    <span className="text-slate-500">Auswahl:</span>
-                    <span className="font-semibold text-slate-800">{selectedRes.boardType || selectedRes.dailyArrangement || resBoard}</span>
+                  <div className="text-xs text-slate-800 border-t border-slate-200 pt-1 mt-1 flex items-center justify-between">
+                    <span className="text-slate-500 font-medium">Auswahl:</span>
+                    <span className="font-bold text-slate-900 truncate ml-1">
+                      {activeTypes.length > 0 ? activeTypes.join(', ') : 'Reine Logis'}
+                    </span>
                   </div>
                 </div>
               );
             })()}
 
             {/* SPALTE 4: FINANZEN & PREISE */}
-            <div className="bg-slate-50 p-2 rounded border border-slate-200 flex flex-col justify-between">
+            <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200 flex flex-col justify-between shadow-2xs">
               <div>
-                <span className="text-[10px] text-slate-500 uppercase font-semibold">Preis & Abrechnung</span>
+                <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">PREIS & ABRECHNUNG</span>
                 <div className="text-xs text-slate-700 font-semibold mt-0.5">
                   Variante: {selectedRes.priceVariant}
                 </div>
@@ -563,6 +580,7 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
           rooms={rooms}
           guests={guests}
           priceVariants={priceVariants}
+          reservations={reservations}
           isOpen={isEditOpen}
           onClose={() => setIsEditOpen(false)}
           onSave={async (data) => {
@@ -583,6 +601,86 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
           }}
         />
       )}
+
+      {/* MELDESCHEIN MODAL VORSCHAU */}
+      {meldescheinRes && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMeldescheinRes(null);
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="relative max-h-[92vh] overflow-y-auto">
+            <MeldescheinPdfDocument
+              guest={
+                meldescheinRes.guest ||
+                guests.find((g) => g.id === meldescheinRes.guestId) || {
+                  id: meldescheinRes.guestId,
+                  guestNumber: `G-${meldescheinRes.guestId}`,
+                  searchName: `${meldescheinRes.last_name || ''}, ${meldescheinRes.first_name || ''}`,
+                  titleCode: 1,
+                  salutation: 'Sehr geehrte(r)',
+                  lastName: meldescheinRes.last_name || '',
+                  firstName: meldescheinRes.first_name || '',
+                  isRegularGuest: false,
+                }
+              }
+              reservation={meldescheinRes}
+              room={rooms.find((rm) => rm.id === meldescheinRes.roomId)}
+              onClose={() => setMeldescheinRes(null)}
+              onPrint={() => window.print()}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* BESTÄTIGUNGSDIALOG RESERVIERUNG LÖSCHEN */}
+      <ConfirmDialog
+        isOpen={!!resToDelete}
+        title="Buchung stornieren / löschen?"
+        message={
+          <>
+            Möchten Sie die Buchung{' '}
+            <strong>{resToDelete?.reservationNumber}</strong> für Gast{' '}
+            <strong>
+              {resToDelete?.guest
+                ? `${resToDelete.guest.lastName}, ${resToDelete.guest.firstName}`
+                : resToDelete?.last_name || 'Unbekannt'}
+            </strong>{' '}
+            wirklich stornieren bzw. unwiderruflich löschen?
+          </>
+        }
+        details={
+          resToDelete
+            ? [
+                { label: 'Buchungs-Nr', value: resToDelete.reservationNumber },
+                {
+                  label: 'Gast',
+                  value: resToDelete.guest
+                    ? `${resToDelete.guest.lastName}, ${resToDelete.guest.firstName}`
+                    : resToDelete.last_name || '-',
+                },
+                {
+                  label: 'Zimmer',
+                  value: `Zimmer ${resToDelete.room?.roomCode || resToDelete.room?.name || resToDelete.roomId || '-'}`,
+                },
+                {
+                  label: 'Reisezeitraum',
+                  value: `${resToDelete.arrivalDate} bis ${resToDelete.departureDate} (${resToDelete.nights || 1} ÜN)`,
+                },
+                ...(resToDelete.totalPrice
+                  ? [{ label: 'Gesamtbetrag', value: `${resToDelete.totalPrice.toFixed(2)} €` }]
+                  : []),
+              ]
+            : undefined
+        }
+        hint="Hinweis: Die Zimmerbelegung wird freigegeben. Eventuelle Kassenbelege oder Rechnungen sollten separat geprüft werden."
+        confirmLabel="[Enter] Buchung stornieren"
+        cancelLabel="[Esc] Abbrechen"
+        danger={true}
+        onConfirm={confirmDelete}
+        onClose={() => setResToDelete(null)}
+      />
 
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Room } from '../../types';
 import { ActionBar } from '../ActionBar';
-import { Sparkles, AlertTriangle, ShieldCheck, Filter } from 'lucide-react';
+import { Sparkles, AlertTriangle, ShieldCheck, Filter, DoorClosed } from 'lucide-react';
 
 interface RoomsViewProps {
   rooms: Room[];
@@ -173,15 +173,18 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
       </div>
 
       {/* 2. DETAIL: FORMULAR UNTERE HÄLFTE */}
-      <div className="h-56 bg-white border-t border-slate-300 p-3 shrink-0 flex flex-col justify-between">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2">
+      <div className="min-h-[16rem] bg-white border-t border-slate-300 p-3.5 shrink-0 flex flex-col justify-between overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-2 mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-800">
-              Zimmerdetails & Housekeeping:{' '}
-              {selectedRoom ? `[${selectedRoom.roomCode}] ${selectedRoom.name}` : ''}
+            <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <DoorClosed className="w-4 h-4 text-[#376189]" />
+              <span>
+                Zimmerdetails & Housekeeping:{' '}
+                {selectedRoom ? `[${selectedRoom.roomCode}] ${selectedRoom.name}` : ''}
+              </span>
             </span>
             {isEditing && (
-              <span className="bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase animate-pulse">
+              <span className="bg-amber-500 text-white text-[11px] px-2.5 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
                 Bearbeitungsmodus
               </span>
             )}
@@ -190,84 +193,84 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
           <div className="flex items-center gap-2">
             <button
               onClick={handleToggleCleaning}
-              className="flex items-center gap-1 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 px-2 py-0.5 rounded text-xs font-medium cursor-pointer transition-colors"
+              className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 px-2.5 py-1 rounded text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
               title="Reinigungszustand umschalten"
             >
-              <Sparkles className="w-3 h-3 text-amber-500" />
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>Status umschalten (Doppelklick)</span>
             </button>
-            <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+            <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200 font-bold">
               ID: {selectedRoom?.id} | Sort: {selectedRoom?.sortOrder}
             </span>
           </div>
         </div>
 
         {formData ? (
-          <div className="grid grid-cols-4 gap-3 text-xs flex-1">
+          <div className="grid grid-cols-4 gap-3.5 text-xs flex-1">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Zimmercode</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">ZIMMERCODE</label>
               <input
                 type="text"
                 disabled={!isEditing}
                 value={formData.roomCode}
                 onChange={(e) => setFormData({ ...formData, roomCode: e.target.value })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-mono font-bold text-slate-900 disabled:bg-slate-100 shadow-2xs"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Zimmerbezeichnung</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">ZIMMERBEZEICHNUNG</label>
               <input
                 type="text"
                 disabled={!isEditing}
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-semibold disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-bold text-slate-900 disabled:bg-slate-100 shadow-2xs"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Kategorie / Name</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">KATEGORIE / NAME</label>
               <input
                 type="text"
                 disabled={!isEditing}
                 value={formData.categoryName}
                 onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 font-medium disabled:bg-slate-100 shadow-2xs"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Basispreis pro Nacht (€)</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">BASISPREIS PRO NACHT (€)</label>
               <input
                 type="number"
                 step="0.5"
                 disabled={!isEditing}
                 value={formData.basePrice}
                 onChange={(e) => setFormData({ ...formData, basePrice: parseFloat(e.target.value) || 0 })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono font-bold text-emerald-700 disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-mono font-bold text-emerald-800 disabled:bg-slate-100 shadow-2xs"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Betten</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">BETTEN</label>
               <input
                 type="number"
                 disabled={!isEditing}
                 value={formData.baseBeds}
                 onChange={(e) => setFormData({ ...formData, baseBeds: parseInt(e.target.value) || 1 })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 font-semibold disabled:bg-slate-100 shadow-2xs"
                 placeholder="Betten"
               />
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Gebäude</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">GEBÄUDE</label>
               <select
                 disabled={!isEditing}
                 value={formData.floor === 'Nebengebäude' ? 'Nebengebäude' : 'Hauptgebäude'}
                 onChange={(e) => setFormData({ ...formData, floor: e.target.value })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-semibold disabled:bg-slate-100 cursor-pointer"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-semibold text-slate-900 disabled:bg-slate-100 cursor-pointer shadow-2xs"
               >
                 <option value="Hauptgebäude">Hauptgebäude</option>
                 <option value="Nebengebäude">Nebengebäude</option>
@@ -275,12 +278,12 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Reinigungszustand</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">REINIGUNGSZUSTAND</label>
               <select
                 disabled={!isEditing}
                 value={formData.housekeepingStatus}
                 onChange={(e) => setFormData({ ...formData, housekeepingStatus: e.target.value as any })}
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-semibold disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-semibold text-slate-900 disabled:bg-slate-100 shadow-2xs"
               >
                 <option value="clean">Sauber (Gästefertig)</option>
                 <option value="dirty">Dirty (Reinigung ausstehend)</option>
@@ -289,14 +292,14 @@ export const RoomsView: React.FC<RoomsViewProps> = ({ rooms, onUpdateRoom }) => 
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-slate-500 uppercase font-semibold">Sonderhinweis Housekeeping</label>
+              <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">SONDERHINWEIS HOUSEKEEPING</label>
               <input
                 type="text"
                 disabled={!isEditing}
                 value={formData.specialCleaningNote || ''}
                 onChange={(e) => setFormData({ ...formData, specialCleaningNote: e.target.value })}
                 placeholder="z. B. Keine Wäsche"
-                className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs italic disabled:bg-slate-100"
+                className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 italic disabled:bg-slate-100 shadow-2xs"
               />
             </div>
           </div>

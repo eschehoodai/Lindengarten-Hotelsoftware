@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Guest, Salutation } from '../../types';
 import { ActionBar } from '../ActionBar';
+import { ConfirmDialog } from '../dialogs/ConfirmDialog';
 import { 
-  Users, Search, Star, ShieldAlert, CheckCircle, 
-  MapPin, Phone, Mail, CreditCard, Building, Calendar, IdCard, Filter 
+  Users, Search, Star, CheckCircle, 
+  MapPin, Phone, Mail, CreditCard, Building, Calendar, IdCard, Filter, FileText 
 } from 'lucide-react';
+import { MeldescheinPdfDocument } from '../pdf/MeldescheinPdfDocument';
 
 interface GuestsViewProps {
   guests: Guest[];
@@ -25,10 +27,12 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
 }) => {
   const [selectedId, setSelectedId] = useState<number | null>(guests[0]?.id || null);
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [filterMode, setFilterMode] = useState<'ALL' | 'REGULAR' | 'TAX_EXEMPT'>('ALL');
+  const [filterMode, setFilterMode] = useState<'ALL' | 'REGULAR'>('ALL');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [isNew, setIsNew] = useState<boolean>(false);
   const [formData, setFormData] = useState<Partial<Guest>>({});
+  const [guestToDelete, setGuestToDelete] = useState<Guest | null>(null);
+  const [meldescheinGuest, setMeldescheinGuest] = useState<Guest | null>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
   const lastNameInputRef = useRef<HTMLInputElement>(null);
 
@@ -66,7 +70,6 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
     return guests.filter((g) => {
       // Filter tab
       if (filterMode === 'REGULAR' && !g.isRegularGuest) return false;
-      if (filterMode === 'TAX_EXEMPT' && !g.isTaxExempt) return false;
 
       // Text search
       if (!q) return true;
@@ -109,8 +112,6 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       idCardNumber: '',
       paymentMethod: 'BAR',
       isRegularGuest: false,
-      isTaxExempt: false,
-      taxExemptReason: '',
       remarks: '',
       guestInfo: '',
     });
@@ -149,14 +150,16 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
     }
   };
 
-  const handleDelete = async () => {
-    if (!selectedGuest) return;
-    const confirm = window.confirm(
-      `Möchten Sie den Gast "${selectedGuest.firstName} ${selectedGuest.lastName}" (Nr: ${selectedGuest.guestNumber}) wirklich löschen?`
-    );
-    if (confirm) {
-      await onDeleteGuest(selectedGuest.id);
-    }
+  const handleDelete = () => {
+    if (!selectedGuest || isEditing) return;
+    setGuestToDelete(selectedGuest);
+  };
+
+  const confirmDelete = async () => {
+    if (!guestToDelete) return;
+    const targetId = guestToDelete.id;
+    setGuestToDelete(null);
+    await onDeleteGuest(targetId);
   };
 
   const handleCancel = () => {
@@ -170,6 +173,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
   // Keyboard navigation through table (wenn nicht in Eingabefeldern getippt wird)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (guestToDelete) return;
       const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
 
       // Tastaturkürzel während der Bearbeitung
@@ -222,7 +226,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [filteredGuests, selectedId, isEditing, selectedGuest, onCreateBookingForGuest, formData]);
+  }, [filteredGuests, selectedId, isEditing, selectedGuest, onCreateBookingForGuest, formData, guestToDelete]);
 
   return (
     <div className="flex-1 flex flex-col min-h-0 bg-slate-200 select-none">
@@ -272,17 +276,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               <Star className="w-3 h-3 text-[#cf8232] fill-[#cf8232]" />
               <span>Stammgäste</span>
             </button>
-            <button
-              onClick={() => setFilterMode('TAX_EXEMPT')}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                filterMode === 'TAX_EXEMPT'
-                  ? 'bg-[#397356] text-white font-semibold'
-                  : 'bg-white hover:bg-slate-200 text-slate-700 border border-slate-300'
-              }`}
-            >
-              <ShieldAlert className="w-3 h-3 text-[#397356]" />
-              <span>Gästetaxe Befreit</span>
-            </button>
+
           </div>
         </div>
 
@@ -306,8 +300,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               <th className="py-1.5 px-3 border-r border-slate-300">Firma / Zusatz</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-44">PLZ, Ort</th>
               <th className="py-1.5 px-3 border-r border-slate-300 w-32">Telefon</th>
-              <th className="py-1.5 px-3 border-r border-slate-300 w-24 text-center">Stammgast</th>
-              <th className="py-1.5 px-3 w-32 text-center">Gästetaxe</th>
+              <th className="py-1.5 px-3 w-24 text-center">Stammgast</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 font-mono text-[11px]">
@@ -365,17 +358,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="py-1 px-3 text-center font-sans">
-                      {guest.isTaxExempt ? (
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
-                          isSelected ? 'bg-white/20 text-white' : 'bg-[#edf6f1] text-[#285740]'
-                        }`}>
-                          Befreit
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 text-[10px]">Normal (2,90 €)</span>
-                      )}
-                    </td>
+
                   </tr>
                 );
               })
@@ -385,10 +368,10 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
       </div>
 
       {/* 3. DETAIL: FORMULAR GÄSTE-STAMMDATEN (UNTERER SPLIT-SCREEN) */}
-      <div className="h-64 bg-white border-t border-slate-300 p-2.5 shrink-0 flex flex-col justify-between overflow-y-auto">
-        <div className="flex items-center justify-between border-b border-slate-200 pb-1 mb-2">
+      <div className="min-h-[17.5rem] bg-white border-t border-slate-300 p-3 shrink-0 flex flex-col justify-between overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-1.5 mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+            <span className="text-sm font-bold text-slate-900 flex items-center gap-2">
               <Users className="w-4 h-4 text-[#376189]" />
               <span>Gästestamm-Detailmaske (Meldeschein & Adresse):</span>
               <strong className="text-[#376189]">
@@ -398,18 +381,29 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
               </strong>
             </span>
             {isEditing && (
-              <span className="bg-[#397356] text-white text-[10px] px-2 py-0.5 rounded font-bold uppercase animate-pulse">
+              <span className="bg-[#397356] text-white text-[11px] px-2.5 py-0.5 rounded font-bold uppercase tracking-wider animate-pulse">
                 {isNew ? 'Neuanlage' : 'Bearbeitungsmodus'}
               </span>
             )}
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs font-mono text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-              Gast-Nr: <strong>{formData.guestNumber || 'Neu'}</strong>
+            {selectedGuest && !isEditing && (
+              <button
+                type="button"
+                onClick={() => setMeldescheinGuest(selectedGuest)}
+                className="flex items-center gap-1.5 bg-[#376189] hover:bg-[#2c4f70] text-white px-2.5 py-1 rounded text-xs font-semibold cursor-pointer shadow-xs transition-colors"
+                title="Amtlichen Meldeschein (§§ 29, 30 BMG) für diesen Gast öffnen & drucken"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-300" />
+                <span>Meldeschein (DIN A4)</span>
+              </button>
+            )}
+            <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2.5 py-1 rounded border border-slate-200 font-bold">
+              Gast-Nr: <strong className="text-slate-900">{formData.guestNumber || 'Neu'}</strong>
             </span>
             {selectedGuest && !isEditing && (
-              <span className="text-xs text-slate-400 font-mono">
+              <span className="text-xs text-slate-500 font-mono">
                 ID: {selectedGuest.id}
               </span>
             )}
@@ -417,15 +411,15 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
         </div>
 
         {/* EINGABEFELDER-GRID */}
-        <div className="grid grid-cols-6 gap-2 text-xs flex-1">
+        <div className="grid grid-cols-6 gap-2.5 text-xs flex-1">
           {/* ZEILE 1: Anrede, Suchname, Stammgast */}
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Anrede</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">ANREDE</label>
             <select
               disabled={!isEditing}
               value={formData.salutation || 'Sehr geehrter Herr'}
               onChange={(e) => setFormData({ ...formData, salutation: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-xs md:text-[13px] font-medium text-slate-900 disabled:bg-slate-100 shadow-2xs"
             >
               <option value="Sehr geehrter Herr">Herr</option>
               <option value="Sehr geehrte Frau">Frau</option>
@@ -436,207 +430,196 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
             </select>
           </div>
 
-          <div className="col-span-2 flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Suchname (Schnellsuche)</label>
+          <div className="col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">SUCHNAME (SCHNELLSUCHE)</label>
             <input
               type="text"
               disabled={!isEditing}
               placeholder="z.B. Müller, Thomas"
               value={formData.searchName || ''}
               onChange={(e) => setFormData({ ...formData, searchName: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 font-medium"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] disabled:bg-slate-100 font-medium text-slate-900 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Telefon</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">TELEFON</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.phone || ''}
               onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
               placeholder="Festnetz / Mobil"
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="col-span-2 flex items-center justify-between gap-2 pt-3">
+          <div className="col-span-2 flex items-center justify-between gap-2 pt-4">
             {/* Stammgast Checkbox */}
-            <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
+            <label className="flex items-center gap-2 cursor-pointer bg-slate-50 px-3 py-1.5 rounded border border-slate-300 hover:bg-slate-100 transition-colors shadow-2xs">
               <input
                 type="checkbox"
                 disabled={!isEditing}
                 checked={!!formData.isRegularGuest}
                 onChange={(e) => setFormData({ ...formData, isRegularGuest: e.target.checked })}
-                className="w-3.5 h-3.5 text-amber-600 rounded"
+                className="w-4 h-4 text-amber-600 rounded cursor-pointer"
               />
-              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
                 <span>Stammgast</span>
-              </span>
-            </label>
-
-            {/* Gästetaxe Befreit Checkbox */}
-            <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 px-2 py-1 rounded border border-slate-200">
-              <input
-                type="checkbox"
-                disabled={!isEditing}
-                checked={!!formData.isTaxExempt}
-                onChange={(e) => setFormData({ ...formData, isTaxExempt: e.target.checked })}
-                className="w-3.5 h-3.5 text-emerald-600 rounded"
-              />
-              <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                <ShieldAlert className="w-3.5 h-3.5 text-emerald-600" />
-                <span>Gästetaxe Befreit</span>
               </span>
             </label>
           </div>
 
           {/* ZEILE 2: Nachname, Vorname, Firma, Vorname 2 */}
-          <div className="col-span-2 flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Nachname *</label>
+          <div className="col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center">
+              NACHNAME <span className="text-rose-600 font-bold ml-1">*</span>
+            </label>
             <input
               ref={lastNameInputRef}
               type="text"
               disabled={!isEditing}
               value={formData.lastName || ''}
               onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-bold disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-bold text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="col-span-2 flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Vorname *</label>
+          <div className="col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center">
+              VORNAME <span className="text-rose-600 font-bold ml-1">*</span>
+            </label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.firstName || ''}
               onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 font-medium"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] disabled:bg-slate-100 font-medium text-slate-900 shadow-2xs"
             />
           </div>
 
-          <div className="col-span-2 flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Firma / Name 2</label>
+          <div className="col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">FIRMA / NAME 2</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.name2 || ''}
               onChange={(e) => setFormData({ ...formData, name2: e.target.value })}
               placeholder="Firmenname (optional)"
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
           {/* ZEILE 3: Straße, Hausnummer, PLZ, Ort, Land */}
-          <div className="col-span-2 flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Straße</label>
+          <div className="col-span-2 flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">STRASSE</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.street || ''}
               onChange={(e) => setFormData({ ...formData, street: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Hausnr.</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">HAUSNR.</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.houseNumber || ''}
               onChange={(e) => setFormData({ ...formData, houseNumber: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">PLZ</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">PLZ</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.zipCode || ''}
               onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-mono font-bold text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Ort</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">ORT</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.city || ''}
               onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100 font-medium"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] disabled:bg-slate-100 font-medium text-slate-900 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Land</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">LAND</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.country || 'Deutschland'}
               onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
           {/* ZEILE 4: Meldeschein-Felder (Geburt, Nationalität, Ausweisnr, E-Mail, Zahlungsart, City-Tax Grund) */}
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Geburtsdatum</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">GEBURTSDATUM</label>
             <input
               type="date"
               disabled={!isEditing}
               value={formData.birthDate || ''}
               onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-xs md:text-[13px] text-slate-900 font-mono disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Nationalität</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">NATIONALITÄT</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.nationality || 'deutsch'}
               onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Pass-/Ausweisnr.</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">PASS-/AUSWEISNR.</label>
             <input
               type="text"
               disabled={!isEditing}
               value={formData.idCardNumber || ''}
               onChange={(e) => setFormData({ ...formData, idCardNumber: e.target.value })}
               placeholder="Ausländerpflicht BMG"
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs font-mono disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-mono text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">E-Mail</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">E-MAIL</label>
             <input
               type="email"
               disabled={!isEditing}
               value={formData.email || ''}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-2 py-1 text-xs disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] text-slate-900 disabled:bg-slate-100 shadow-2xs"
             />
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Zahlungsart</label>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wide">ZAHLUNGSART</label>
             <select
               disabled={!isEditing}
               value={formData.paymentMethod || 'BAR'}
               onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs font-semibold disabled:bg-slate-100"
+              className="bg-slate-50 border border-slate-300 rounded px-2 py-1.5 text-xs md:text-[13px] font-semibold text-slate-900 disabled:bg-slate-100 shadow-2xs"
             >
               <option value="BAR">BAR</option>
               <option value="EC">EC-Karte</option>
@@ -645,24 +628,7 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
             </select>
           </div>
 
-          <div className="flex flex-col gap-0.5">
-            <label className="text-[10px] text-slate-500 uppercase font-semibold">Gästetaxe Befreiungsgrund</label>
-            <select
-              disabled={!isEditing || !formData.isTaxExempt}
-              value={formData.taxExemptReason || ''}
-              onChange={(e) => setFormData({ ...formData, taxExemptReason: e.target.value })}
-              className="bg-slate-50 border border-slate-300 rounded px-1.5 py-1 text-xs disabled:bg-slate-100"
-            >
-              <option value="">Keiner</option>
-              <option value="GdB >= 80 mit Merkzeichen B">Schwerbehindert (GdB ≥ 80 mit Vermerk B)</option>
-              <option value="Begleitperson (Merkzeichen B)">Begleitperson Ausweis Vermerk B</option>
-              <option value="Ausbildung ohne Zweitwohnung">Ausbildung ohne Zweitwohnung</option>
-              <option value="Bettlägerig mit ärztlichem Attest">Bettlägerig mit ärztlichem Attest</option>
-              <option value="Kinder unter 6 Jahren">Kind unter 6 Jahren (frei)</option>
-              <option value="Schul-/Freizeitfahrt (Gruppe bis 15 J.)">Kinder-/Jugendgruppe Schul-/Freizeitfahrt</option>
-              <option value="Jahresgästetaxe Familie">Familienangehöriger Jahresgästetaxe</option>
-            </select>
-          </div>
+
         </div>
       </div>
 
@@ -698,6 +664,66 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
           }
         }}
       />
+
+      {/* BESTÄTIGUNGSDIALOG LÖSCHEN */}
+      <ConfirmDialog
+        isOpen={!!guestToDelete}
+        title="Gast wirklich löschen?"
+        message={
+          <>
+            Möchten Sie den Gast{' '}
+            <strong>
+              {guestToDelete?.firstName} {guestToDelete?.lastName}
+            </strong>{' '}
+            wirklich unwiderruflich aus den Stammdaten löschen?
+          </>
+        }
+        details={
+          guestToDelete
+            ? [
+                { label: 'Gast-Nummer', value: guestToDelete.guestNumber || '-' },
+                {
+                  label: 'Name',
+                  value: `${guestToDelete.salutation || ''} ${guestToDelete.firstName || ''} ${guestToDelete.lastName}`.trim(),
+                },
+                {
+                  label: 'Ort / Adresse',
+                  value:
+                    [guestToDelete.street, guestToDelete.zipCode, guestToDelete.city]
+                      .filter(Boolean)
+                      .join(', ') || 'Keine Adresse hinterlegt',
+                },
+                ...(guestToDelete.name2
+                  ? [{ label: 'Zusatz / Firma', value: guestToDelete.name2 }]
+                  : []),
+              ]
+            : undefined
+        }
+        hint="Hinweis: Bereits erstellte Rechnungen und Buchungen dieses Gastes bleiben erhalten."
+        confirmLabel="[Enter] Gast löschen"
+        cancelLabel="[Esc] Abbrechen"
+        danger={true}
+        onConfirm={confirmDelete}
+        onClose={() => setGuestToDelete(null)}
+      />
+
+      {/* MELDESCHEIN VORSCHAU MODAL */}
+      {meldescheinGuest && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setMeldescheinGuest(null);
+          }}
+          className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="relative max-h-[92vh] overflow-y-auto">
+            <MeldescheinPdfDocument
+              guest={meldescheinGuest}
+              onClose={() => setMeldescheinGuest(null)}
+              onPrint={() => window.print()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

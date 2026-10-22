@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Invoice } from '../../types';
 import { roundToCent, calculateSplitTax } from '../../services/taxEngine';
-import { CheckCircle2, ShieldCheck, Printer, Download, Sparkles } from 'lucide-react';
+import { CheckCircle2, Printer, Download } from 'lucide-react';
+import QRCode from 'qrcode';
+import { HOTEL_CONFIG } from '../../constants/hotelConfig';
 
 interface InvoicePdfDocumentProps {
   invoice: Invoice;
@@ -14,6 +16,19 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
   onPrint,
   onDownloadPdf,
 }) => {
+  const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    const qrData = invoice.tseQrCodeData || (invoice.tseTransactionId ? `TSE;${invoice.tseTransactionId};${invoice.tseSignature || ''};${invoice.totalGross}EUR;${invoice.invoiceDate}` : null);
+    if (qrData) {
+      QRCode.toDataURL(qrData, { width: 80, margin: 0 })
+        .then(url => setQrCodeDataUrl(url))
+        .catch(err => console.warn('QR Code generation failed:', err));
+    } else {
+      setQrCodeDataUrl(null);
+    }
+  }, [invoice.tseQrCodeData, invoice.tseTransactionId, invoice.tseSignature, invoice.totalGross, invoice.invoiceDate]);
+
   const items = invoice.items || [];
 
   // Berechne die Steuertabelle nach § 14 UStG
@@ -25,8 +40,6 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
   let tax19 = 0;
   let gross19 = 0;
 
-  let cityTax = 0;
-
   items.forEach((it) => {
     const total = roundToCent(Number(it.totalGross) || (Number(it.quantity) * Number(it.unitPriceGross)) || 0);
     if (it.taxRate === 0.07 || it.taxType === 'LODGING') {
@@ -34,8 +47,6 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
       net7 += split.net;
       tax7 += split.tax;
       gross7 += split.gross;
-    } else if (it.taxRate === 0.00 || it.taxType === 'CITY_TAX') {
-      cityTax += total;
     } else {
       const split = calculateSplitTax(total, 0.19);
       net19 += split.net;
@@ -44,9 +55,9 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
     }
   });
 
-  const totalNet = roundToCent(net7 + net19 + cityTax);
+  const totalNet = roundToCent(net7 + net19);
   const totalTax = roundToCent(tax7 + tax19);
-  const totalGross = roundToCent(gross7 + gross19 + cityTax);
+  const totalGross = roundToCent(gross7 + gross19);
 
   const handlePrint = () => {
     if (onPrint) {
@@ -94,41 +105,42 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
       {/* DAS ECHTE DIN A4 DOKUMENT (210mm x 297mm) */}
       <div 
         id="hotel-invoice-printable"
-        className="w-[210mm] min-h-[297mm] bg-white text-slate-900 p-[20mm] shadow-2xl border border-slate-300 flex flex-col justify-between font-sans print:shadow-none print:border-none print:p-0 print:m-0 print:w-full print:min-h-0 print:text-black"
+        className="w-[210mm] min-h-[297mm] bg-white text-slate-900 p-[20mm] shadow-2xl border border-slate-300 flex flex-col justify-between font-sans print:shadow-none print:border-none print:m-0 print:text-black"
         style={{ boxSizing: 'border-box' }}
       >
         <div>
           {/* 1. BRIEFKOPF / HEADER */}
-          <div className="flex justify-between items-start border-b-2 border-slate-800 pb-4">
+          <div className="flex justify-between items-start border-b border-slate-200 pb-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-slate-900 font-serif">
-                Hotel Lindengarten
+                {HOTEL_CONFIG.name}
               </h1>
-              <p className="text-xs text-slate-600 mt-0.5 tracking-wide">
-                Gastlichkeit & Erholung im Zittauer Gebirge
+              <p className="text-xs text-slate-500 mt-0.5 tracking-wide font-sans">
+                {HOTEL_CONFIG.claim}
               </p>
-              <p className="text-[10px] text-slate-500 font-mono mt-1">
-                Lindenweg 4 • 02797 Kurort Jonsdorf
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {HOTEL_CONFIG.street} • {HOTEL_CONFIG.location}
               </p>
             </div>
 
-            <div className="text-right text-[10px] text-slate-600 space-y-0.5 font-mono">
-              <div>Telefon: +49 (0) 35844 7000</div>
-              <div>E-Mail: empfang@lindengarten-jonsdorf.de</div>
-              <div>Web: www.lindengarten-jonsdorf.de</div>
-              <div className="text-slate-400 pt-1">USt-IdNr.: DE 208 456 789</div>
+            <div className="text-right text-[10px] text-slate-500 space-y-0.5">
+              <div>Telefon: {HOTEL_CONFIG.phone}</div>
+              <div>Fax: {HOTEL_CONFIG.fax}</div>
+              <div>E-Mail: {HOTEL_CONFIG.email}</div>
+              <div>Web: {HOTEL_CONFIG.web}</div>
+              <div className="text-slate-400 pt-0.5 font-mono text-[9.5px]">USt-IdNr.: {HOTEL_CONFIG.taxId}</div>
             </div>
           </div>
 
-          {/* 2. ADRESSFELD (DIN 5008) & METADATEN-BLOCK */}
-          <div className="grid grid-cols-12 gap-6 mt-8 mb-6">
+          {/* 2. ADRESSFELD & LUFTIGE METADATEN-SPALTE */}
+          <div className="grid grid-cols-12 gap-6 mt-7 mb-6">
             
             {/* Linke Seite: Anschrift des Gastes */}
             <div className="col-span-7 flex flex-col justify-between">
               <div>
                 {/* Rücksendeangabe klein */}
                 <div className="text-[9px] text-slate-400 border-b border-slate-200 pb-1 mb-3">
-                  Hotel Lindengarten • Lindenweg 4 • 02797 Kurort Jonsdorf
+                  {HOTEL_CONFIG.dinReturnLine}
                 </div>
                 
                 {/* Anschrift */}
@@ -139,70 +151,70 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
                   {invoice.billingDebitor && invoice.billingDebitor !== invoice.recipientName && (
                     <div className="text-slate-600 text-[11px]">z. Hd. {invoice.billingDebitor}</div>
                   )}
-                  <div className="font-semibold">{invoice.recipientName}</div>
+                  <div className="font-semibold text-slate-900">{invoice.recipientName}</div>
                   <div>{invoice.recipientStreet || 'Lindenallee 12'}</div>
                   <div>
                     {invoice.recipientZip || '04109'} {invoice.recipientCity || 'Leipzig'}
                   </div>
                   {invoice.recipientCountry && invoice.recipientCountry !== 'Deutschland' && (
-                    <div className="text-[11px] uppercase tracking-wider">{invoice.recipientCountry}</div>
+                    <div className="text-[11px] uppercase tracking-wider text-slate-600">{invoice.recipientCountry}</div>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Rechte Seite: Rechnungsdaten-Kasten */}
-            <div className="col-span-5 bg-slate-50 border border-slate-200 rounded p-3 text-xs space-y-1.5 font-mono">
-              <div className="flex justify-between border-b border-slate-200 pb-1">
-                <span className="text-slate-500 font-sans">Rechnungs-Nr.:</span>
-                <span className="font-bold text-slate-900">{invoice.invoiceNumber}</span>
+            {/* Rechte Seite: Rechnungsdaten sauber & rahmenlos (kein grauer Kasten) */}
+            <div className="col-span-5 flex flex-col justify-end text-xs space-y-1.5 pl-4 border-l border-slate-200">
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-slate-500 uppercase tracking-wider">Rechnungs-Nr.</span>
+                <span className="font-bold text-slate-900 font-mono text-sm">{invoice.invoiceNumber}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Rechnungsdatum:</span>
-                <span>{invoice.invoiceDate}</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-slate-500">Rechnungsdatum</span>
+                <span className="text-slate-800 font-mono text-[11px]">{invoice.invoiceDate}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Leistungszeitraum:</span>
-                <span className="text-[11px]">{invoice.servicePeriodStart} - {invoice.servicePeriodEnd}</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-slate-500">Leistungszeitraum</span>
+                <span className="text-slate-800 font-mono text-[11px]">{invoice.servicePeriodStart} – {invoice.servicePeriodEnd}</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-sans">Übernachtungen:</span>
-                <span className="font-bold">{invoice.nights} Übernachtung(en)</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-slate-500">Aufenthalt</span>
+                <span className="text-slate-800 text-[11px] font-medium">{invoice.nights} Übernachtung(en)</span>
               </div>
               {invoice.roomName && (
-                <div className="flex justify-between">
-                  <span className="text-slate-500 font-sans">Zimmer / Einheit:</span>
-                  <span className="font-bold text-slate-800 text-[11px]">{invoice.roomName}</span>
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[11px] text-slate-500">Zimmer / Einheit</span>
+                  <span className="font-semibold text-slate-800 text-[11px]">{invoice.roomName}</span>
                 </div>
               )}
-              <div className="flex justify-between border-t border-slate-200 pt-1 text-[11px]">
-                <span className="text-slate-500 font-sans">Zahlart:</span>
-                <span className="font-bold text-blue-900">{invoice.paymentMethod}</span>
+              <div className="flex justify-between items-baseline pt-1 border-t border-slate-100">
+                <span className="text-[11px] text-slate-500">Zahlungsart</span>
+                <span className="font-bold text-slate-900 text-[11px]">{invoice.paymentMethod}</span>
               </div>
             </div>
 
           </div>
 
-          {/* 3. DOKUMENTENTITEL & ANREDE */}
+          {/* 3. DOKUMENTENTITEL & PERSÖNLICHE ANREDE */}
           <div className="mb-4">
-            <h2 className="text-lg font-bold tracking-tight text-slate-900 font-serif border-b border-slate-200 pb-1">
-              RECHNUNG
+            <h2 className="text-base font-bold tracking-wider text-slate-900 font-serif border-b border-slate-200 pb-1 uppercase">
+              Rechnung
             </h2>
-            <div className="mt-2 text-xs text-slate-800 font-sans">
-              <p className="font-bold mb-1">
+            <div className="mt-2 text-xs text-slate-700 font-sans">
+              <p className="font-semibold mb-0.5">
                 {invoice.recipientSalutation || 'Sehr geehrte Damen und Herren'},
               </p>
-              <p className="text-slate-600">
-                wir bedanken uns herzlich für Ihren Besuch im Hotel Lindengarten und erlauben uns, Ihnen folgende Leistungen in Rechnung zu stellen:
+              <p className="text-slate-500">
+                {HOTEL_CONFIG.welcomeText}
               </p>
             </div>
           </div>
 
           {/* 4. POSITIONSTABELLE */}
-          <div className="mb-6">
+          <div className="mb-5">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b-2 border-slate-800 text-slate-700 font-semibold text-[11px]">
+                <tr className="border-b border-slate-300 text-slate-600 font-semibold text-[11px]">
                   <th className="py-1.5 px-2 w-10 text-center">Pos.</th>
                   <th className="py-1.5 px-2">Leistungsbeschreibung / Zeitraum</th>
                   <th className="py-1.5 px-2 text-center w-16">Menge</th>
@@ -211,16 +223,16 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
                   <th className="py-1.5 px-2 text-right w-28">Gesamt (brutto)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 text-xs font-sans">
+              <tbody className="divide-y divide-slate-100 text-xs font-sans">
                 {items.map((item, idx) => (
                   <tr key={item.id || idx} className="hover:bg-slate-50/50">
-                    <td className="py-2 px-2 text-center text-slate-500 font-mono text-[11px]">
+                    <td className="py-2 px-2 text-center text-slate-400 font-mono text-[11px]">
                       {item.positionNumber || idx + 1}
                     </td>
                     <td className="py-2 px-2">
                       <div className="font-medium text-slate-900">{item.description}</div>
                       {item.infoNote && (
-                        <div className="text-[10px] text-slate-500 italic mt-0.5 font-sans">
+                        <div className="text-[10px] text-slate-400 italic mt-0.5 font-sans">
                           {item.infoNote}
                         </div>
                       )}
@@ -243,30 +255,30 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
             </table>
           </div>
 
-          {/* 5. STEUER- & SUMMENBLOCK (§ 14 UStG) */}
-          <div className="grid grid-cols-12 gap-6 mb-6">
+          {/* 5. STEUER- & SUMMENBLOCK (§ 14 UStG) – NAHTLOS & RECHTSBÜNDIG */}
+          <div className="grid grid-cols-12 gap-6 mb-5">
             
-            {/* Steuertabelle */}
-            <div className="col-span-7 bg-slate-50 p-2.5 rounded border border-slate-200 text-[11px] font-mono">
-              <div className="font-bold text-slate-700 font-sans mb-1.5 text-xs">
+            {/* Steuertabelle § 14 UStG (Schlank links) */}
+            <div className="col-span-6 text-[10.5px] text-slate-600 flex flex-col justify-end">
+              <div className="font-semibold text-slate-700 text-[11px] mb-1">
                 Steueraufschlüsselung gem. § 14 UStG:
               </div>
-              <table className="w-full text-right border-collapse">
+              <table className="w-full text-right text-[10px] border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-300 text-[10px] text-slate-500">
-                    <th className="text-left pb-1">Steuersatz</th>
-                    <th className="pb-1">Nettobetrag</th>
-                    <th className="pb-1">MwSt-Betrag</th>
-                    <th className="pb-1">Bruttobetrag</th>
+                  <tr className="border-b border-slate-200 text-slate-400">
+                    <th className="text-left pb-1">Satz</th>
+                    <th className="pb-1">Netto</th>
+                    <th className="pb-1">MwSt</th>
+                    <th className="pb-1">Brutto</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200 text-[10px]">
+                <tbody className="divide-y divide-slate-100 font-mono">
                   {gross7 > 0 && (
                     <tr>
                       <td className="text-left py-0.5">7,00 % (Logis)</td>
                       <td className="py-0.5">{net7.toFixed(2)} €</td>
                       <td className="py-0.5">{tax7.toFixed(2)} €</td>
-                      <td className="py-0.5 font-semibold">{gross7.toFixed(2)} €</td>
+                      <td className="py-0.5 font-semibold text-slate-800">{gross7.toFixed(2)} €</td>
                     </tr>
                   )}
                   {gross19 > 0 && (
@@ -274,47 +286,34 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
                       <td className="text-left py-0.5">19,00 % (F&B / Service)</td>
                       <td className="py-0.5">{net19.toFixed(2)} €</td>
                       <td className="py-0.5">{tax19.toFixed(2)} €</td>
-                      <td className="py-0.5 font-semibold">{gross19.toFixed(2)} €</td>
-                    </tr>
-                  )}
-                  {cityTax > 0 && (
-                    <tr>
-                      <td className="text-left py-0.5 text-emerald-800">0,00 % (Gästetaxe Jonsdorf*)</td>
-                      <td className="py-0.5">{cityTax.toFixed(2)} €</td>
-                      <td className="py-0.5">0,00 €</td>
-                      <td className="py-0.5 font-semibold text-emerald-800">{cityTax.toFixed(2)} €</td>
+                      <td className="py-0.5 font-semibold text-slate-800">{gross19.toFixed(2)} €</td>
                     </tr>
                   )}
                 </tbody>
               </table>
-              {cityTax > 0 && (
-                <div className="text-[9px] text-slate-500 font-sans mt-1.5 italic">
-                  * Nicht steuerbare Gemeindeabgabe gem. Satzung der Gemeinde Kurort Jonsdorf.
-                </div>
-              )}
             </div>
 
             {/* Summenfeld Rechts */}
-            <div className="col-span-5 flex flex-col justify-end text-xs font-mono space-y-1">
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans">Gesamtbetrag Netto:</span>
-                <span>{totalNet.toFixed(2)} €</span>
+            <div className="col-span-6 flex flex-col justify-end text-xs space-y-1 pl-6">
+              <div className="flex justify-between text-slate-600 text-[11px]">
+                <span>Gesamtbetrag Netto:</span>
+                <span className="font-mono">{totalNet.toFixed(2)} €</span>
               </div>
-              <div className="flex justify-between text-slate-600">
-                <span className="font-sans">Enthaltene MwSt:</span>
-                <span>{totalTax.toFixed(2)} €</span>
+              <div className="flex justify-between text-slate-600 text-[11px]">
+                <span>Enthaltene MwSt:</span>
+                <span className="font-mono">{totalTax.toFixed(2)} €</span>
               </div>
-              <div className="flex justify-between text-base font-bold text-slate-900 border-t-2 border-slate-900 pt-1.5 mt-1 font-serif">
+              <div className="flex justify-between text-base font-bold text-slate-900 border-t-2 border-slate-800 pt-1.5 mt-0.5 font-serif">
                 <span>RECHNUNGSBETRAG:</span>
                 <span className="font-mono">{totalGross.toFixed(2)} €</span>
               </div>
-              <div className="text-right text-[10px] text-slate-500 font-sans mt-1">
+              <div className="text-right text-[10px] pt-1">
                 {invoice.isPaid ? (
-                  <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                  <span className="text-emerald-800 font-semibold bg-emerald-50/80 px-2.5 py-0.5 rounded border border-emerald-200 inline-block">
                     ✓ Rechnungsbetrag dankend erhalten ({invoice.paymentMethod})
                   </span>
                 ) : (
-                  <span className="text-amber-700 font-bold bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                  <span className="text-slate-700 font-semibold bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200 inline-block">
                     Zahlbar bei Abreise ({invoice.paymentMethod})
                   </span>
                 )}
@@ -323,31 +322,69 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
 
           </div>
 
-          {/* 6. PERSÖNLICHER SCHLUSSTEXT / DANKESFORMEL */}
-          <div className="bg-slate-50/80 border-l-4 border-[#376189] p-3 rounded-r my-4 text-xs font-sans text-slate-800 leading-relaxed">
-            <p className="font-medium">
-              {invoice.closingText || 'Vielen Dank für Ihren Aufenthalt im Hotel Lindengarten! Wir hoffen, Sie hatten eine erholsame Zeit bei uns und beehren uns gerne wieder.'}
+          {/* 6. PERSÖNLICHER SCHLUSSTEXT / DANKESFORMEL (SCHLANK & ELEGANT) */}
+          <div className="my-5 pt-3 border-t border-slate-100 text-xs font-serif italic text-slate-700 flex justify-between items-baseline">
+            <p>
+              {invoice.closingText || HOTEL_CONFIG.closingText}
             </p>
-            <p className="mt-2 text-slate-600 text-[11px]">
-              Wir wünschen Ihnen eine gute und sichere Heimreise!
-            </p>
-            <p className="mt-1 font-serif italic text-slate-700">
-              Ihr Team vom Hotel Lindengarten
+            <p className="text-[11px] text-slate-500 font-sans not-italic font-medium shrink-0 ml-4">
+              {HOTEL_CONFIG.signatureTeam}
             </p>
           </div>
 
         </div>
 
-        {/* 7. DOKUMENTEN-FUSSZEILE (FISKAL / TSE & BANK) */}
-        <div className="border-t border-slate-300 pt-3 text-[9px] text-slate-500 font-mono space-y-1">
-          <div className="flex justify-between">
-            <span>Bankverbindung: Volksbank Löbau-Zittau eG</span>
-            <span>IBAN: DE12 8559 0000 0123 4567 89</span>
-            <span>BIC: GENODEF1LBZ</span>
+        {/* 7. DOKUMENTEN-FUSSZEILE (INTEGRIERT MIT DEZENTEM MINI-TSE-QR-CODE) */}
+        <div className="border-t border-slate-200 pt-3 text-[9px] text-slate-500 font-sans">
+          <div className="grid grid-cols-12 gap-3 items-center">
+            
+            {/* Spalte 1: Anschrift */}
+            <div className="col-span-4 space-y-0.5">
+              <div className="font-bold text-slate-700 text-[9.5px]">{HOTEL_CONFIG.name}</div>
+              <div>{HOTEL_CONFIG.street} • {HOTEL_CONFIG.location}</div>
+              <div>Inhaber: {HOTEL_CONFIG.owner}</div>
+            </div>
+
+            {/* Spalte 2: Bankverbindung & USt */}
+            <div className="col-span-5 space-y-0.5 font-mono text-[8.5px]">
+              <div>{HOTEL_CONFIG.bank}</div>
+              <div>IBAN: {HOTEL_CONFIG.iban} • BIC: {HOTEL_CONFIG.bic}</div>
+              <div>USt-IdNr.: {HOTEL_CONFIG.taxId} • {HOTEL_CONFIG.taxOffice}</div>
+            </div>
+
+            {/* Spalte 3: Eleganter Mini-TSE-QR-Code (Rechtsbündig in der Zeile) */}
+            <div className="col-span-3 flex items-center justify-end gap-2">
+              {qrCodeDataUrl ? (
+                <>
+                  <div className="text-[8px] leading-tight text-right text-slate-500 font-mono">
+                    <div className="font-bold text-slate-700">fiskaly Cloud-TSE</div>
+                    <div>§ 146a AO KassenSichV</div>
+                    <div>Vorgang #{invoice.tseTransactionNumber || 1}</div>
+                    <div className={invoice.tseOfflineFallback ? 'text-amber-700 font-bold' : 'text-emerald-700 font-medium'}>
+                      {invoice.tseOfflineFallback ? 'OFFLINE-MODUS' : 'SIGNIERT'}
+                    </div>
+                  </div>
+                  <img 
+                    src={qrCodeDataUrl} 
+                    alt="KassenSichV TSE-QR-Code" 
+                    className="w-12 h-12 p-0.5 bg-white border border-slate-200 rounded shrink-0" 
+                  />
+                </>
+              ) : (
+                <div className="text-[8px] text-slate-400 text-right leading-tight">
+                  <div className="font-medium text-slate-600">Rechnung auf Ziel</div>
+                  <div>E-Rechnung EN 16931</div>
+                  <div>Seite 1 von 1</div>
+                </div>
+              )}
+            </div>
+
           </div>
-          <div className="flex justify-between text-slate-400 border-t border-slate-100 pt-1">
-            <span>KassenSichV: TSE-Transaktions-ID {invoice.tseTransactionId || 'TSE-2026-LIVE-VALID'}</span>
+
+          {/* Feine Subzeile */}
+          <div className="flex justify-between items-center text-[8px] text-slate-400 border-t border-slate-100 pt-1.5 mt-2">
             <span>E-Rechnung konform zu EN 16931 (ZUGFeRD 2.0 / Factur-X)</span>
+            <span>KassenSichV zertifiziert durch BSI TR-03153</span>
             <span>Seite 1 von 1</span>
           </div>
         </div>

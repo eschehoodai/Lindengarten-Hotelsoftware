@@ -12,6 +12,10 @@ const defaultLocalDbPath = path.resolve(__dirname, '../../../lindengarten.db');
 let resolvedUrl = process.env.DATABASE_URL;
 if (!resolvedUrl && fs.existsSync(defaultLocalDbPath)) {
   resolvedUrl = `file:${defaultLocalDbPath}`;
+} else if (resolvedUrl && resolvedUrl.startsWith('file:') && !path.isAbsolute(resolvedUrl.slice(5))) {
+  const relPath = resolvedUrl.slice(5);
+  const absPath = path.resolve(__dirname, '../../', relPath);
+  resolvedUrl = `file:${absPath}`;
 }
 
 let client: any = null;

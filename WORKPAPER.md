@@ -369,24 +369,12 @@ export const salutations = sqliteTable('salutations', {
 
 ---
 
-## 6. Berechnungs-Engine: Steuern, Pauschalen & Gästetaxe Kurort Jonsdorf
+## 6. Berechnungs-Engine: Steuern & Pauschalen (Gästetaxe entfernt)
 
 ### 6.1 Gesetzliche Rechenregeln
 1. **Logis:** 7 % USt $\to \text{Netto} = \frac{\text{Brutto}}{1.07}$
 2. **Services / F&B:** 19 % USt $\to \text{Netto} = \frac{\text{Brutto}}{1.19}$
-3. **Gästetaxe Kurort Jonsdorf (Satzung vom 05.05.2025 / 1. Änderung):**
-   * **Tarif Erwachsene & Jugendliche ab 15 Jahren:** **2,90 €** je Person und Tag/Übernachtung (§ 4 Abs. 1 & Anlage S. 8).
-   * **Tarif Kinder & Jugendliche 6 bis 14 Jahre:** **1,45 €** (50 % Ermäßigung gem. § 5).
-   * **Kleinkinder bis 6 Jahre:** **kostenfrei (0,00 €)** gem. § 3 Abs. 1 a.
-   * **Bemessung:** Nach der Zahl der Übernachtungen (Ankunfts- und Abreisetag gelten zusammen als 1 Tag gem. § 4 Abs. 1). Völlig unabhängig vom Zimmerpreis!
-   * **Befreiungstatbestände (`isTaxExempt` gem. § 3 Abs. 1):**
-     - Schwerbehinderte GdB $\ge$ 80 **mit Merkzeichen „B“** im Ausweis (§ 3 Abs. 1 e)
-     - Begleitpersonen von Schwerbehinderten mit Vermerk „B“ (§ 3 Abs. 1 f)
-     - Ausbildung ohne Zweitwohnung (§ 3 Abs. 1 b)
-     - Bettlägerig mit ärztlichem Attest (§ 3 Abs. 1 g)
-     - Kinder unter 6 Jahren
-   * **Wichtiger Unterschied zu Leipzig (§ 2 Abs. 5):** Dienstreisende / berufliche Aufenthalte sind in Kurort Jonsdorf **ausdrücklich gästetaxepflichtig**! (Keine Befreiung für Geschäftsreisen).
-   * **Steuerlicher Ausweis:** Auf Folio B (Gastkonto) separat als durchlaufende Gemeindeabgabe (0 % USt).
+3. **Gästetaxe / Kommunale Abgaben:** *(Vollständig aus dem Programm und allen Berechnungen entfernt)*
 
 ---
 
@@ -429,12 +417,12 @@ graph TD
 3. **Phase 3: Steuer- & Abrechnungslogik** ✅ *(Erfolgreich abgeschlossen)*
    - [x] **Steuer-Engine** (`taxEngine.ts` in Client & Server):
      - USt-Splitting für Logis (7%) und Services/F&B (19%) nach § 12 UStG.
-     - **Gästetaxe Kurort Jonsdorf (Satzung vom 05.05.2025)**: 2,90 € (ab 15 J.), 1,45 € (6–14 J., 50% Ermäßigung gem. § 5), 0,00 € (< 6 J. frei gem. § 3 Abs. 1 a), pro Person und Übernachtung. Befreiungsprüfung für GdB $\ge$ 80 mit Merkzeichen „B“, Begleitperson „B“, Ausbildung (§ 3). Dienstreisen bleiben steuerpflichtig (§ 2 Abs. 5).
-     - **Dreifach-Folio-Splitting**: Aggregation und Steuerberechnung für Folio A (Logis/Firma), Folio B (Gastkonto/Auslagen inkl. Gästetaxe), Folio C (Sonderposten) mit Prüfsummen-Validierung (`totalGross === totalNet + totalTax`).
+     - **Gästetaxe / City Tax**: Auf Wunsch vollständig aus dem Programm entfernt.
+     - **Dreifach-Folio-Splitting**: Aggregation und Steuerberechnung für Folio A (Logis/Firma), Folio B (Gastkonto/F&B), Folio C (Sonderposten) mit Prüfsummen-Validierung (`totalGross === totalNet + totalTax`).
      - Dynamische Umbuchung von Zeilen zwischen den Folios A, B und C mit Live-Neuberechnung.
-   - [x] **Kassen- & Folio-Ansicht** (`InvoicesView.tsx`): 3-Wege-Splitting-Container, Verschiebe-Buttons (`→ B`, `← A`, `→ C`), ZUGFeRD 2.0.1 / Factur-X EN 16931 XML-Vorschau mit Gästetaxe Kurort Jonsdorf (0%).
-   - [x] **Live-Steueranzeige im Buchungsdialog** (`ReservationDialog.tsx`): Dynamische Netto/USt-Aufschlüsselung und Jonsdorfer Gästetaxe basierend auf Übernachtungen, Erwachsenen- und Kinderanzahl.
-   - [x] **Vitest Testsuite** (`taxEngine.test.ts`): 33 Unit-Tests zu allen Rundungen, Jonsdorfer Satzungsregeln, Stornos, Rebooking und GoBD-Präzision (100% Erfolgsquote in < 20 ms).
+   - [x] **Kassen- & Folio-Ansicht** (`InvoicesView.tsx`): 3-Wege-Splitting-Container, Verschiebe-Buttons (`→ B`, `← A`, `→ C`), ZUGFeRD 2.0.1 / Factur-X EN 16931 XML-Vorschau.
+   - [x] **Live-Steueranzeige im Buchungsdialog** (`ReservationDialog.tsx`): Dynamische Netto/USt-Aufschlüsselung (7% Logis & 19% F&B).
+   - [x] **Vitest Testsuite** (`taxEngine.test.ts`): Unit-Tests zu allen Rundungen, Stornos, Rebooking und GoBD-Präzision (100% Erfolgsquote).
 4. **Phase 4: Interaktiver Timeline-Scheduler** ✅ *(Erfolgreich abgeschlossen)*
    - [x] **2D-Timeline Kalendermatrix** (`TimelineScheduler.tsx`):
      - Vertikale Y-Achse: Alle 14 Original Lindengarten Zimmer (1, 2, 4, 5, Tobias, Annie, Herman, Prinze, Stall, Scheun, Schupp, Heubod, Kammer, Luisa).

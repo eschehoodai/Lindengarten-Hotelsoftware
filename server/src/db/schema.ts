@@ -108,7 +108,7 @@ export const invoices = sqliteTable('invoices', {
   taxLodging: real('tax_lodging').notNull(),        // USt 7%
   netService: real('net_service').notNull(),        // Netto 19% (F&B, Parkplatz)
   taxService: real('tax_service').notNull(),        // USt 19%
-  cityTaxAmount: real('city_tax_amount').notNull(), // Beherbergungssteuer Leipzig (0% USt)
+  cityTaxAmount: real('city_tax_amount').notNull().default(0.0), // Gästetaxe entfernt (Standard 0.0)
   totalGross: real('total_gross').notNull(),        // Bruttogesamtbetrag
   
   paymentMethod: text('payment_method').notNull().default('BAR'), // BAR, EC, KREDIT, RECHNUNG
@@ -157,6 +157,9 @@ export const priceVariants = sqliteTable('price_variants', {
   name: text('name').notNull(),
   shortCode: text('short_code').notNull(),
   isFlatRate: integer('is_flat_rate', { mode: 'boolean' }).default(false),
+  breakfastPersons: integer('breakfast_persons').default(0),
+  breakfastRate: real('breakfast_rate').default(4.80),
+  isOnlineImport: integer('is_online_import', { mode: 'boolean' }).default(false),
 });
 
 // 7. Anreden-Stamm

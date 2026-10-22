@@ -26,3 +26,43 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Print-Optimierung für DIN A4 Rechnungen & Dokumente */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+
+  html, body, #root {
+    height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* Blende die gesamte Web-Desktop-Oberfläche im Druck aus */
+  body * {
+    visibility: hidden;
+  }
+
+  /* Blende ausschließlich das Rechnungs-Dokument ein */
+  #hotel-invoice-printable,
+  #hotel-invoice-printable * {
+    visibility: visible;
+  }
+
+  #hotel-invoice-printable {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm !important;
+    min-height: 297mm !important;
+    margin: 0 !important;
+    padding: 20mm !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+    border: none !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

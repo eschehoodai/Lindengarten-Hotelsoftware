@@ -30,7 +30,7 @@ Das System ist für den **parallelen Mehrplatz-Betrieb (Multi-Client LAN)** an 2
 ### ✅ Phase 2: UI-Architektur, Master-Detail & Hotkeys
 - **Tastatursteuerung & Aktionsleiste:** `[F6]` Wählen/Status, `[F7]` Neu, `[F8]` Kopieren, `[F9]` Ändern/Speichern, `[Entf]` Löschen, `[Esc]` Abbrechen.
 - **[F1] Belegung:** Modulwechsel & Belegungsübersicht.
-- **[F2] Gäste:** Gästestamm mit Adressverwaltung, Bundesmeldegesetz-Pflichtfeldern (Ausweisnr., Nationalität) und Leipzig City-Tax Befreiungsprüfung (`isTaxExempt`).
+- **[F2] Gäste:** Gästestamm mit Adressverwaltung, Bundesmeldegesetz-Pflichtfeldern (Ausweisnr., Nationalität) und Stammgast-Kennzeichnung.
 - **[F3] Zimmer:** Zimmerstamm mit Schnellfiltern (`DZ`, `EZ`, `TBZ`, `SUITE`, `⚠️ Nur Schmutzig`) und Live-Housekeeping Status (`Sauber` vs. `Dirty`).
 - **[F5] Stammdaten:** Kataloge für Preisvarianten und Anreden.
 - **Dialoge:**

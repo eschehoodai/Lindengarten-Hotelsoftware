@@ -146,9 +146,25 @@ async function initTables() {
       variant_number INTEGER NOT NULL UNIQUE,
       name TEXT NOT NULL,
       short_code TEXT NOT NULL,
-      is_flat_rate INTEGER DEFAULT 0
+      is_flat_rate INTEGER DEFAULT 0,
+      breakfast_persons INTEGER DEFAULT 0,
+      breakfast_rate REAL DEFAULT 4.80,
+      is_online_import INTEGER DEFAULT 0
     );
   `);
+
+  try {
+    await client.execute(`ALTER TABLE price_variants ADD COLUMN breakfast_persons INTEGER DEFAULT 0;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE price_variants ADD COLUMN breakfast_rate REAL DEFAULT 4.80;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE price_variants ADD COLUMN is_online_import INTEGER DEFAULT 0;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN notes TEXT;`);
+  } catch {}
 
   await client.execute(`
     CREATE TABLE IF NOT EXISTS salutations (
@@ -201,20 +217,20 @@ async function seedData() {
     }
   }
 
-  // 2. Preisvarianten (aus Bild 05)
+  // 2. Preisvarianten (aus Bild 05 & Lindengarten F&B Logik)
   const variants = [
-    { nr: 1, name: 'Doppelt belegt', short: 'Doppelt belegt', flat: 0 },
-    { nr: 2, name: 'Einfach belegt', short: 'Einfach belegt', flat: 0 },
-    { nr: 3, name: 'Dreifach belegt', short: 'Dreifach belegt', flat: 0 },
-    { nr: 5, name: 'ohne F&B 1 Person', short: 'ohne F&B 1 Pers', flat: 0 },
-    { nr: 6, name: 'ohne F&B 2 Personen', short: 'ohne F&B 2 Pers', flat: 0 },
-    { nr: 7, name: 'Online', short: 'Online', flat: 0 },
+    { nr: 1, name: 'Doppelt belegt', short: 'Doppelt belegt', flat: 0, bfPers: 2, bfRate: 4.80, isOnline: 0 },
+    { nr: 2, name: 'Einfach belegt', short: 'Einfach belegt', flat: 0, bfPers: 1, bfRate: 4.80, isOnline: 0 },
+    { nr: 3, name: 'Dreifach belegt', short: 'Dreifach belegt', flat: 0, bfPers: 3, bfRate: 4.80, isOnline: 0 },
+    { nr: 5, name: 'ohne F&B 1 Person', short: 'ohne F&B 1 Pers', flat: 0, bfPers: 0, bfRate: 4.80, isOnline: 0 },
+    { nr: 6, name: 'ohne F&B 2 Personen', short: 'ohne F&B 2 Pers', flat: 0, bfPers: 0, bfRate: 4.80, isOnline: 0 },
+    { nr: 7, name: 'Online', short: 'Online', flat: 0, bfPers: 0, bfRate: 4.80, isOnline: 1 },
   ];
 
   for (const v of variants) {
     await client.execute({
-      sql: `INSERT OR REPLACE INTO price_variants (variant_number, name, short_code, is_flat_rate) VALUES (?, ?, ?, ?)`,
-      args: [v.nr, v.name, v.short, v.flat]
+      sql: `INSERT OR REPLACE INTO price_variants (variant_number, name, short_code, is_flat_rate, breakfast_persons, breakfast_rate, is_online_import) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [v.nr, v.name, v.short, v.flat, v.bfPers, v.bfRate, v.isOnline]
     });
   }
 
@@ -317,78 +333,91 @@ async function seedData() {
     roomMap.set(String(row.room_code), Number(row.id));
   }
 
-  // 5. Buchungen anlegen (10 Buchungen, 4-8 Tage, alle im Oktober 2026)
+  // 5. Buchungen anlegen (10 neue Buchungen, 4-7 Tage, alle im Oktober 2026)
   const reservationsToInsert = [
     {
-      reservationNumber: '178840', guestId: guestIds[2], roomId: roomMap.get('4')!,
-      arrivalDate: '2026-10-02', departureDate: '2026-10-07', nights: 5, adultsCount: 2, childrenCount: 0,
-      companionNames: '', priceVariant: 'Doppelt belegt', pricePerNight: 90.0, totalPrice: 450.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, billingDebitor: 'Hanse Touristik Hamburg GmbH'
+      reservationNumber: '19101', guestId: guestIds[3], roomId: roomMap.get('Annie')!,
+      arrivalDate: '2026-10-02', departureDate: '2026-10-06', nights: 4, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Dr. Thomas Bergmann', priceVariant: 'Doppelt belegt', pricePerNight: 95.0, totalPrice: 380.0,
+      isArrived: 1, isDeparted: 1, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, dailyArrangement: 'Frühstücksbuffet',
+      billingDebitor: 'Bergmann', notes: 'Wanderurlaub im Zittauer Gebirge. Frühere Abreise am Vormittag erfolgt.'
     },
     {
-      reservationNumber: '18506', guestId: guestIds[1], roomId: roomMap.get('Herman')!,
-      arrivalDate: '2026-10-09', departureDate: '2026-10-15', nights: 6, adultsCount: 2, childrenCount: 1,
-      companionNames: 'Aline, Torsten und Lea', priceVariant: 'Dreifach belegt', pricePerNight: 166.0, totalPrice: 996.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
-      boardType: '2Gang', hasBreakfast: 1, breakfastCount: 3, twoGangCount: 3, dinnerCount: 3,
-      dailyArrangement: 'Angebot F/ 2 Gang', billingDebitor: 'Junghans'
-    },
-    {
-      reservationNumber: '18520', guestId: guestIds[0], roomId: roomMap.get('Prinze')!,
-      arrivalDate: '2026-10-14', departureDate: '2026-10-18', nights: 4, adultsCount: 1, childrenCount: 0,
-      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 130.0, totalPrice: 520.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, billingDebitor: 'David'
-    },
-    {
-      reservationNumber: '18521', guestId: guestIds[3], roomId: roomMap.get('1')!,
-      arrivalDate: '2026-10-03', departureDate: '2026-10-10', nights: 7, adultsCount: 2, childrenCount: 0,
-      companionNames: 'Dr. Stefanie & Thomas Bergmann', priceVariant: 'Doppelt belegt', pricePerNight: 85.0, totalPrice: 595.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, dailyArrangement: 'Frühstücksbuffet', billingDebitor: 'Bergmann'
-    },
-    {
-      reservationNumber: '18522', guestId: guestIds[4], roomId: roomMap.get('2')!,
-      arrivalDate: '2026-10-12', departureDate: '2026-10-17', nights: 5, adultsCount: 1, childrenCount: 0,
-      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 85.0, totalPrice: 425.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, billingDebitor: 'von Buchenau'
-    },
-    {
-      reservationNumber: '18523', guestId: guestIds[5], roomId: roomMap.get('Stall')!,
-      arrivalDate: '2026-10-01', departureDate: '2026-10-09', nights: 8, adultsCount: 2, childrenCount: 1,
-      companionNames: 'Sarah, Michael und Tim Klein', priceVariant: 'Dreifach belegt', pricePerNight: 145.0, totalPrice: 1160.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 3, dailyArrangement: 'Frühstücksbuffet Suite', billingDebitor: 'Klein'
-    },
-    {
-      reservationNumber: '18524', guestId: guestIds[6], roomId: roomMap.get('Scheun')!,
-      arrivalDate: '2026-10-18', departureDate: '2026-10-24', nights: 6, adultsCount: 2, childrenCount: 0,
-      companionNames: 'Prof. Dr. Heinrich & Dr. Gisela Weber', priceVariant: 'Doppelt belegt', pricePerNight: 140.0, totalPrice: 840.0,
-      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
-      boardType: '3Gang', hasBreakfast: 1, breakfastCount: 2, threeGangCount: 2, dinnerCount: 2, dailyArrangement: 'Gourmet HP 3-Gang', billingDebitor: 'Weber'
-    },
-    {
-      reservationNumber: '18525', guestId: guestIds[7], roomId: roomMap.get('Tobias')!,
-      arrivalDate: '2026-10-06', departureDate: '2026-10-13', nights: 7, adultsCount: 2, childrenCount: 0,
-      companionNames: 'Claudia & Bernd Sonnenschein', priceVariant: 'Doppelt belegt', pricePerNight: 95.0, totalPrice: 665.0,
-      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, billingDebitor: 'Sonnenschein'
-    },
-    {
-      reservationNumber: '18526', guestId: guestIds[8], roomId: roomMap.get('Kammer')!,
-      arrivalDate: '2026-10-21', departureDate: '2026-10-26', nights: 5, adultsCount: 1, childrenCount: 0,
+      reservationNumber: '19102', guestId: guestIds[0], roomId: roomMap.get('Kammer')!,
+      arrivalDate: '2026-10-04', departureDate: '2026-10-09', nights: 5, adultsCount: 1, childrenCount: 0,
       companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 65.0, totalPrice: 325.0,
-      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
-      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, billingDebitor: 'Wunderlich'
+      isArrived: 1, isDeparted: 1, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, dailyArrangement: 'Frühstück',
+      billingDebitor: 'David', notes: 'Geschäftsreise Handwerkskammer. Frühes Frühstück ab 06:45 Uhr.'
     },
     {
-      reservationNumber: '18527', guestId: guestIds[9], roomId: roomMap.get('Luisa')!,
-      arrivalDate: '2026-10-23', departureDate: '2026-10-29', nights: 6, adultsCount: 2, childrenCount: 1,
-      companionNames: 'Sabine, Jörg und Felix Meister', priceVariant: 'Dreifach belegt', pricePerNight: 155.0, totalPrice: 930.0,
+      reservationNumber: '19103', guestId: guestIds[2], roomId: roomMap.get('Heubod')!,
+      arrivalDate: '2026-10-05', departureDate: '2026-10-12', nights: 7, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Jan Langerwisch', priceVariant: 'Doppelt belegt', pricePerNight: 135.0, totalPrice: 945.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: '3Gang', hasBreakfast: 1, breakfastCount: 2, threeGangCount: 2, dinnerCount: 2,
+      dailyArrangement: 'Gourmet HP 3-Gang', billingDebitor: 'Hanse Touristik Hamburg GmbH',
+      notes: 'Kostenübernahme Übernachtung & Halbpension durch Hanse Touristik Hamburg GmbH vorliegend.'
+    },
+    {
+      reservationNumber: '19104', guestId: guestIds[1], roomId: roomMap.get('Scheun')!,
+      arrivalDate: '2026-10-08', departureDate: '2026-10-15', nights: 7, adultsCount: 2, childrenCount: 2,
+      companionNames: 'Aline, Max und Lea Junghans', priceVariant: 'Dreifach belegt', pricePerNight: 170.0, totalPrice: 1190.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: '2Gang', hasBreakfast: 1, breakfastCount: 4, twoGangCount: 4, dinnerCount: 4,
+      dailyArrangement: 'Herbstferien-Familienangebot 2-Gang', billingDebitor: 'Junghans',
+      notes: 'Herbsturlaub mit der Familie. Beistellbett für Tochter Lea im Zimmer aufgebaut.'
+    },
+    {
+      reservationNumber: '19105', guestId: guestIds[7], roomId: roomMap.get('5')!,
+      arrivalDate: '2026-10-10', departureDate: '2026-10-14', nights: 4, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Bernd Sonnenschein', priceVariant: 'Doppelt belegt', pricePerNight: 90.0, totalPrice: 360.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 2, dailyArrangement: 'Frühstück',
+      billingDebitor: 'Sonnenschein', notes: 'Hochzeitstag am 12.10. Flasche Lindengarten-Sekt mit Grußkarte auf dem Zimmer vorbereitet.'
+    },
+    {
+      reservationNumber: '19106', guestId: guestIds[4], roomId: roomMap.get('Tobias')!,
+      arrivalDate: '2026-10-12', departureDate: '2026-10-17', nights: 5, adultsCount: 1, childrenCount: 0,
+      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 95.0, totalPrice: 475.0,
+      isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, dailyArrangement: 'Frühstücksbuffet',
+      billingDebitor: 'von Buchenau', notes: 'Spätanreise ca. 20:30 Uhr angekündigt. Benötigt Stellplatz mit E-Ladesäule am Nebengebäude.'
+    },
+    {
+      reservationNumber: '19107', guestId: guestIds[8], roomId: roomMap.get('Schupp')!,
+      arrivalDate: '2026-10-15', departureDate: '2026-10-21', nights: 6, adultsCount: 1, childrenCount: 0,
+      companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 85.0, totalPrice: 510.0,
+      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 1, dailyArrangement: 'Frühstück',
+      billingDebitor: 'Wunderlich', notes: 'Reist mit mittelgroßem Hund (Golden Retriever). Futternapf und Hundedecke aufs Zimmer.'
+    },
+    {
+      reservationNumber: '19108', guestId: guestIds[6], roomId: roomMap.get('Prinze')!,
+      arrivalDate: '2026-10-17', departureDate: '2026-10-24', nights: 7, adultsCount: 2, childrenCount: 0,
+      companionNames: 'Dr. Gisela Weber', priceVariant: 'Doppelt belegt', pricePerNight: 130.0, totalPrice: 910.0,
       isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
-      boardType: '2Gang', hasBreakfast: 1, breakfastCount: 3, twoGangCount: 3, dinnerCount: 3, dailyArrangement: 'Halbpension 2-Gang', billingDebitor: 'Meister'
+      boardType: '3Gang', hasBreakfast: 1, breakfastCount: 2, threeGangCount: 2, dinnerCount: 2,
+      dailyArrangement: 'Gourmet HP 3-Gang', billingDebitor: 'Weber',
+      notes: 'Stammgäste. Bevorzugen Tisch 4 im Wintergarten. Glutenfreie Kost für Frau Dr. Weber.'
+    },
+    {
+      reservationNumber: '19109', guestId: guestIds[5], roomId: roomMap.get('Stall')!,
+      arrivalDate: '2026-10-20', departureDate: '2026-10-26', nights: 6, adultsCount: 2, childrenCount: 1,
+      companionNames: 'Michael und Tim Klein', priceVariant: 'Dreifach belegt', pricePerNight: 145.0, totalPrice: 870.0,
+      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
+      boardType: 'Frühstück', hasBreakfast: 1, breakfastCount: 3, dailyArrangement: 'Frühstücksbuffet Suite',
+      billingDebitor: 'Klein', notes: 'Kinderreisebett und Hochstuhl im Zimmer vorbereiten. Allergiker-Bettwäsche.'
+    },
+    {
+      reservationNumber: '19110', guestId: guestIds[9], roomId: roomMap.get('Luisa')!,
+      arrivalDate: '2026-10-22', departureDate: '2026-10-29', nights: 7, adultsCount: 2, childrenCount: 1,
+      companionNames: 'Sabine, Jörg und Felix Meister', priceVariant: 'Dreifach belegt', pricePerNight: 155.0, totalPrice: 1085.0,
+      isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
+      boardType: '2Gang', hasBreakfast: 1, breakfastCount: 3, twoGangCount: 3, dinnerCount: 3,
+      dailyArrangement: 'Halbpension 2-Gang', billingDebitor: 'Meister',
+      notes: 'Wanderpaket Lindengarten gebucht. Frühe Abreise am 29.10. geplant.'
     }
   ];
 
@@ -400,74 +429,218 @@ async function seedData() {
               adults_count, children_count, companion_names, price_variant, price_per_night, total_price,
               is_arrived, is_departed, is_written_reservation, is_locked_to_room, board_type,
               has_breakfast, breakfast_count, two_gang_count, three_gang_count, dinner_count,
-              daily_arrangement, billing_debitor, created_at
+              daily_arrangement, billing_debitor, notes, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
             RETURNING id;`,
       args: [
         r.reservationNumber, r.guestId, r.roomId, r.arrivalDate, r.departureDate, r.nights,
         r.adultsCount, r.childrenCount || 0, r.companionNames || '', r.priceVariant, r.pricePerNight, r.totalPrice,
         r.isArrived, r.isDeparted || 0, r.isWrittenReservation, r.isLockedToRoom, r.boardType || 'Frühstück',
         r.hasBreakfast, r.breakfastCount || 1, r.twoGangCount || 0, r.threeGangCount || 0, r.dinnerCount || 0,
-        r.dailyArrangement || null, r.billingDebitor || '',
+        r.dailyArrangement || null, r.billingDebitor || '', r.notes || null,
       ]
     });
     reservationIds.push(Number(res.rows[0].id));
   }
 
   // 6. Beispiel-Rechnungen anlegen
-  // Rechnung 1: Hanse Touristik (Bezahlt)
+  // Rechnung 1: Dr. Stefanie Bergmann (Bezahlt)
   const inv1 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117799', ?, ?, '2026-10-06', '2026-10-02', '2026-10-07', 420.56, 29.44, 21.01, 3.99, 22.50, 497.50, 'BAR', 1, datetime('now'))
+          VALUES ('117810', ?, ?, '2026-10-06', '2026-10-02', '2026-10-06', 355.14, 24.86, 16.81, 3.19, 0.00, 400.00, 'EC-Karte', 1, datetime('now'))
           RETURNING id;`,
-    args: [reservationIds[0], guestIds[2]]
+    args: [reservationIds[0], guestIds[3]]
   });
   const inv1Id = Number(inv1.rows[0].id);
 
   await client.execute({
     sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
-          VALUES (?, 'A', 1, 'Marion Langerwisch 178847', '4', 5.0, 90.0, 450.0, 0.07, 2, 'LODGING', '2026-10-02', '2026-10-07', 'Doppelt belegt');`,
+          VALUES (?, 'A', 1, 'Dr. Stefanie Bergmann', 'Annie', 4.0, 95.0, 380.0, 0.07, 2, 'LODGING', '2026-10-02', '2026-10-06', 'Doppelt belegt');`,
     args: [inv1Id]
   });
 
   await client.execute({
     sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
-          VALUES (?, 'B', 2, 'Parkplatz', '4', 5.0, 5.0, 25.0, 0.19, 1, 'SERVICE', '2026-10-06', '2026-10-06', '');`,
+          VALUES (?, 'B', 2, 'Parkplatz', 'Annie', 4.0, 5.0, 20.0, 0.19, 1, 'SERVICE', '2026-10-06', '2026-10-06', '');`,
     args: [inv1Id]
   });
 
-  // Rechnung 2: Junghans (Offen)
+  // Rechnung 2: Klaus David (Bezahlt)
   const inv2 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117800', ?, ?, '2026-10-14', '2026-10-09', '2026-10-15', 800.00, 56.00, 117.65, 22.35, 45.00, 1041.00, 'BAR', 0, datetime('now'))
+          VALUES ('117811', ?, ?, '2026-10-09', '2026-10-04', '2026-10-09', 303.74, 21.26, 0.00, 0.00, 0.00, 325.00, 'BAR', 1, datetime('now'))
           RETURNING id;`,
-    args: [reservationIds[1], guestIds[1]]
+    args: [reservationIds[1], guestIds[0]]
   });
   const inv2Id = Number(inv2.rows[0].id);
 
   await client.execute({
     sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
-          VALUES (?, 'A', 1, 'Familie Torsten Junghans', 'Herman', 6.0, 166.0, 996.0, 0.07, 2, 'LODGING', '2026-10-09', '2026-10-15', 'Dreifach belegt');`,
+          VALUES (?, 'A', 1, 'Klaus David', 'Kammer', 5.0, 65.0, 325.0, 0.07, 2, 'LODGING', '2026-10-04', '2026-10-09', 'Einfach belegt');`,
     args: [inv2Id]
   });
 
-  // Rechnung 3: Dr. Stefanie Bergmann (Bezahlt)
+  // Rechnung 3: Hanse Touristik (Offen)
   const inv3 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117801', ?, ?, '2026-10-09', '2026-10-03', '2026-10-10', 556.07, 38.93, 23.53, 4.47, 31.50, 654.50, 'EC-Karte', 1, datetime('now'))
+          VALUES ('117812', ?, ?, '2026-10-12', '2026-10-05', '2026-10-12', 883.18, 61.82, 147.06, 27.94, 0.00, 1120.00, 'RECHNUNG', 0, datetime('now'))
           RETURNING id;`,
-    args: [reservationIds[3], guestIds[3]]
+    args: [reservationIds[2], guestIds[2]]
   });
   const inv3Id = Number(inv3.rows[0].id);
 
   await client.execute({
     sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
-          VALUES (?, 'A', 1, 'Dr. Stefanie Bergmann', '1', 7.0, 85.0, 595.0, 0.07, 2, 'LODGING', '2026-10-03', '2026-10-10', 'Doppelt belegt');`,
+          VALUES (?, 'A', 1, 'Marion Langerwisch (Hanse Touristik)', 'Heubod', 7.0, 135.0, 945.0, 0.07, 2, 'LODGING', '2026-10-05', '2026-10-12', 'Doppelt belegt');`,
     args: [inv3Id]
   });
 
-  console.log('✅ Seeding erfolgreich abgeschlossen! 10 Gäste und 10 Reservierungen (4-8 Tage, Oktober 2026) wurden angelegt.');
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'B', 2, 'Halbpension 3-Gang Gourmet', 'Heubod', 7.0, 25.0, 175.0, 0.19, 1, 'SERVICE', '2026-10-12', '2026-10-12', '');`,
+    args: [inv3Id]
+  });
+
+  // Rechnung 4: Torsten Junghans (Offen)
+  const inv4 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19104', ?, ?, '2026-10-15', '2026-10-08', '2026-10-15', 986.54, 69.06, 548.23, 104.17, 0.00, 1708.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[3], guestIds[1]]
+  });
+  const inv4Id = Number(inv4.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Scheune Suite (Dreifach belegt)', 'Scheune', 7.0, 150.80, 1055.60, 0.07, 2, 'LODGING', '2026-10-08', '2026-10-15', 'Logis 7%');`,
+    args: [inv4Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (4 Pers. x 7 Tage)', 'Scheune', 28.0, 4.80, 134.40, 0.19, 1, 'SERVICE', '2026-10-08', '2026-10-15', 'F&B 19%');`,
+    args: [inv4Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 3, 'Halbpension 2-Gang Menü', 'Scheune', 28.0, 18.50, 518.00, 0.19, 1, 'SERVICE', '2026-10-08', '2026-10-15', 'Familienmenü');`,
+    args: [inv4Id]
+  });
+
+  // Rechnung 5: Claudia Sonnenschein (Offen)
+  const inv5 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19105', ?, ?, '2026-10-14', '2026-10-10', '2026-10-14', 300.56, 21.04, 32.27, 6.13, 0.00, 360.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[4], guestIds[7]]
+  });
+  const inv5Id = Number(inv5.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Zimmer 5 (Doppelt belegt)', 'Zimmer 5', 4.0, 80.40, 321.60, 0.07, 2, 'LODGING', '2026-10-10', '2026-10-14', 'Logis 7%');`,
+    args: [inv5Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (2 Pers. x 4 Tage)', 'Zimmer 5', 8.0, 4.80, 38.40, 0.19, 1, 'SERVICE', '2026-10-10', '2026-10-14', 'F&B 19%');`,
+    args: [inv5Id]
+  });
+
+  // Rechnung 6: Maximilian von Buchenau (Offen)
+  const inv6 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19106', ?, ?, '2026-10-17', '2026-10-12', '2026-10-17', 421.50, 29.50, 20.17, 3.83, 0.00, 475.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[5], guestIds[4]]
+  });
+  const inv6Id = Number(inv6.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Zimmer Tobias (Einfach belegt)', 'Zimmer Tobias', 5.0, 90.20, 451.00, 0.07, 2, 'LODGING', '2026-10-12', '2026-10-17', 'Logis 7%');`,
+    args: [inv6Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (1 Pers. x 5 Tage)', 'Zimmer Tobias', 5.0, 4.80, 24.00, 0.19, 1, 'SERVICE', '2026-10-12', '2026-10-17', 'F&B 19%');`,
+    args: [inv6Id]
+  });
+
+  // Rechnung 7: Felix Wunderlich (Offen)
+  const inv7 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19107', ?, ?, '2026-10-21', '2026-10-15', '2026-10-21', 449.72, 31.48, 24.20, 4.60, 0.00, 510.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[6], guestIds[8]]
+  });
+  const inv7Id = Number(inv7.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Schuppen (Einfach belegt)', 'Schuppen', 6.0, 80.20, 481.20, 0.07, 2, 'LODGING', '2026-10-15', '2026-10-21', 'Logis 7%');`,
+    args: [inv7Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (1 Pers. x 6 Tage)', 'Schuppen', 6.0, 4.80, 28.80, 0.19, 1, 'SERVICE', '2026-10-15', '2026-10-21', 'F&B 19%');`,
+    args: [inv7Id]
+  });
+
+  // Rechnung 8: Heinrich Weber (Offen)
+  const inv8 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19108', ?, ?, '2026-10-24', '2026-10-17', '2026-10-24', 787.66, 55.14, 56.47, 10.73, 0.00, 910.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[7], guestIds[6]]
+  });
+  const inv8Id = Number(inv8.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Prinzessin von Sachsen Stube (Doppelt belegt)', 'Prinzessin von Sachsen Stube', 7.0, 120.40, 842.80, 0.07, 2, 'LODGING', '2026-10-17', '2026-10-24', 'Logis 7%');`,
+    args: [inv8Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (2 Pers. x 7 Tage)', 'Prinzessin von Sachsen Stube', 14.0, 4.80, 67.20, 0.19, 1, 'SERVICE', '2026-10-17', '2026-10-24', 'F&B 19%');`,
+    args: [inv8Id]
+  });
+
+  // Rechnung 9: Sarah Klein (Offen)
+  const inv9 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19109', ?, ?, '2026-10-26', '2026-10-20', '2026-10-26', 732.34, 51.26, 72.61, 13.79, 0.00, 870.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[8], guestIds[5]]
+  });
+  const inv9Id = Number(inv9.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Stall Suite (Dreifach belegt)', 'Stall Suite', 6.0, 130.60, 783.60, 0.07, 2, 'LODGING', '2026-10-20', '2026-10-26', 'Logis 7%');`,
+    args: [inv9Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (3 Pers. x 6 Tage)', 'Stall Suite', 18.0, 4.80, 86.40, 0.19, 1, 'SERVICE', '2026-10-20', '2026-10-26', 'F&B 19%');`,
+    args: [inv9Id]
+  });
+
+  // Rechnung 10: Sabine Meister (Offen)
+  const inv10 = await client.execute({
+    sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
+          VALUES ('RE-19110', ?, ?, '2026-10-29', '2026-10-22', '2026-10-29', 919.81, 64.39, 84.71, 16.09, 0.00, 1085.00, 'BAR', 0, datetime('now'))
+          RETURNING id;`,
+    args: [reservationIds[9], guestIds[9]]
+  });
+  const inv10Id = Number(inv10.rows[0].id);
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 1, 'Übernachtung Suite Luisa (Dreifach belegt)', 'Suite Luisa', 7.0, 140.60, 984.20, 0.07, 2, 'LODGING', '2026-10-22', '2026-10-29', 'Logis 7%');`,
+    args: [inv10Id]
+  });
+  await client.execute({
+    sql: `INSERT INTO invoice_items (invoice_id, folio_bucket, position_number, description, room_code, quantity, unit_price_gross, total_gross, tax_rate, tax_code, tax_type, date_from, date_to, info_note)
+          VALUES (?, 'A', 2, 'Frühstücksbuffet (3 Pers. x 7 Tage)', 'Suite Luisa', 21.0, 4.80, 100.80, 0.19, 1, 'SERVICE', '2026-10-22', '2026-10-29', 'F&B 19%');`,
+    args: [inv10Id]
+  });
+
+  console.log('✅ Seeding erfolgreich abgeschlossen! 10 Gäste und 10 Reservierungen (4-7 Tage, Oktober 2026) wurden angelegt.');
 }
 
 async function main() {
@@ -475,8 +648,9 @@ async function main() {
     await initTables();
     await seedData();
     process.exit(0);
-  } catch (err) {
-    console.error('❌ Fehler beim Seeding:', err);
+  } catch (err: any) {
+    console.log('❌ Fehler beim Seeding:', err?.message || err);
+    if (err?.stack) console.log(err.stack);
     process.exit(1);
   }
 }

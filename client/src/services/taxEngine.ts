@@ -87,224 +87,9 @@ export function calculateSplitTax(
   return { net, tax, gross: roundedGross };
 }
 
-export type TaxExemptReason =
-  | 'GdB >= 80 mit Merkzeichen B'
-  | 'Begleitperson (Merkzeichen B)'
-  | 'Ausbildung ohne Zweitwohnung'
-  | 'Bettlägerig mit ärztlichem Attest'
-  | 'Kinder unter 6 Jahren'
-  | 'Schul-/Freizeitfahrt (Gruppe bis 15 J.)'
-  | 'Jahresgästetaxe Familie'
-  | 'beruflich'
-  | 'minderjaehrig'
-  | 'schwerbehindert'
-  | 'medizinisch'
-  | string;
+// Gästetaxe & kommunale Abgaben wurden vollständig entfernt
 
-export interface JonsdorfGaestetaxeParams {
-  nights?: number;
-  adultsCount?: number;
-  childrenCount?: number; // 6 bis 14 Jahre (1,45 €)
-  smallChildrenCount?: number; // 0 bis 5 Jahre (0,00 €)
-  isExempt?: boolean;
-  exemptReason?: string | null;
-  rates?: {
-    adultRate?: number; // Standard: 2.90
-    childRate?: number; // Standard: 1.45 (50%)
-    smallChildRate?: number; // Standard: 0.00
-  };
-}
 
-export interface JonsdorfGaestetaxeResult {
-  cityTaxAmount: number; // Für Folio & ZUGFeRD Kompatibilität
-  gaestetaxeAmount: number;
-  isExempt: boolean;
-  reason?: string;
-  nights: number;
-  adultsCount: number;
-  adultRate: number;
-  childrenCount: number;
-  childRate: number;
-  smallChildrenCount: number;
-  smallChildRate: number;
-  breakdown: string;
-}
-
-/**
- * Gästetaxesatzung Kurort Jonsdorf (Fassung vom 05.05.2025 / 1. Änderung)
- *
- * Gesetzliche Vorgaben:
- * 1. Tagessatz Erwachsene & Jugendliche ab 15 Jahren: 2,90 € je Person & Tag/Übernachtung (§ 4 Abs. 1 & Anlage S. 8)
- * 2. Kinder & Jugendliche vom vollendeten 6. bis zum vollendeten 15. Lebensjahr: 1,45 € (50% Ermäßigung gem. § 5)
- * 3. Kinder bis zur Vollendung des 6. Lebensjahres: kostenfrei (0,00 € gem. § 3 Abs. 1 a)
- * 4. Erhebungsmaßstab: Die Verpflichtung entsteht am Ankunftstag und endet am Abreisetag.
- *    Dauer wird nach Zahl der Übernachtungen bemessen. Ankunfts- und Abreisetag gelten als 1 Tag (§ 4 Abs. 1).
- * 5. Befreiungen (§ 3 Abs. 1):
- *    - GdB >= 80 mit Vermerk "B" im Ausweis
- *    - Begleitperson eines Ausweisinhabers mit Vermerk "B"
- *    - Ausbildung ohne Zweitwohnung
- *    - Bettlägerige Kranke mit ärztlichem Attest
- *    - Kinder unter 6 Jahren
- * 6. WICHTIGER RECHTSHINWEIS (§ 2 Abs. 5):
- *    Personen, die aus beruflichen Gründen (Tagungen, Messen, Montage) übernachten,
- *    sind in Kurort Jonsdorf AUSDRÜCKLICH GÄSTETAXEPFLICHTIG!
- */
-export function calculateJonsdorfGaestetaxe(
-  nightsOrParams: number | JonsdorfGaestetaxeParams = 1,
-  adultsCount: number = 1,
-  childrenCount: number = 0,
-  smallChildrenCount: number = 0,
-  isExempt: boolean = false,
-  exemptReason?: string | null,
-  customRates?: { adultRate?: number; childRate?: number; smallChildRate?: number }
-): JonsdorfGaestetaxeResult {
-  let nights = 1;
-  let adults = 1;
-  let children = 0;
-  let smallChildren = 0;
-  let exempt = false;
-  let reason: string | undefined | null = null;
-  let adultRate = 2.90;
-  let childRate = 1.45;
-  let smallChildRate = 0.00;
-
-  if (typeof nightsOrParams === 'object' && nightsOrParams !== null) {
-    nights = Math.max(0, nightsOrParams.nights ?? 1);
-    adults = Math.max(0, nightsOrParams.adultsCount ?? 1);
-    children = Math.max(0, nightsOrParams.childrenCount ?? 0);
-    smallChildren = Math.max(0, nightsOrParams.smallChildrenCount ?? 0);
-    exempt = !!nightsOrParams.isExempt;
-    reason = nightsOrParams.exemptReason;
-    if (nightsOrParams.rates?.adultRate !== undefined) adultRate = nightsOrParams.rates.adultRate;
-    if (nightsOrParams.rates?.childRate !== undefined) childRate = nightsOrParams.rates.childRate;
-    if (nightsOrParams.rates?.smallChildRate !== undefined) smallChildRate = nightsOrParams.rates.smallChildRate;
-  } else {
-    nights = Math.max(0, Number(nightsOrParams) || 0);
-    adults = Math.max(0, adultsCount);
-    children = Math.max(0, childrenCount);
-    smallChildren = Math.max(0, smallChildrenCount);
-    exempt = isExempt;
-    reason = exemptReason;
-    if (customRates?.adultRate !== undefined) adultRate = customRates.adultRate;
-    if (customRates?.childRate !== undefined) childRate = customRates.childRate;
-    if (customRates?.smallChildRate !== undefined) smallChildRate = customRates.smallChildRate;
-  }
-
-  // Befreiungsprüfung (§ 3 Satzung Kurort Jonsdorf)
-  // Hinweis zu § 2 Abs. 5: Berufliche Reisen sind in Jonsdorf steuerpflichtig!
-  const isBusinessExemptAttempt = typeof reason === 'string' && (
-    reason.toLowerCase().includes('beruflich') ||
-    reason.toLowerCase().includes('dienstlich') ||
-    reason.toLowerCase().includes('geschäftlich') ||
-    reason.toLowerCase().includes('business')
-  );
-
-  const isActuallyExempt = (exempt || (typeof reason === 'string' && reason.trim().length > 0)) && !isBusinessExemptAttempt;
-
-  if (isActuallyExempt) {
-    return {
-      cityTaxAmount: 0.0,
-      gaestetaxeAmount: 0.0,
-      isExempt: true,
-      reason: reason || 'Befreit gem. § 3 Satzung Kurort Jonsdorf',
-      nights,
-      adultsCount: adults,
-      adultRate,
-      childrenCount: children,
-      childRate,
-      smallChildrenCount: smallChildren,
-      smallChildRate,
-      breakdown: `Befreit (${reason || 'Nachweis gem. § 3'})`,
-    };
-  }
-
-  if (nights === 0 || (adults === 0 && children === 0 && smallChildren === 0)) {
-    return {
-      cityTaxAmount: 0.0,
-      gaestetaxeAmount: 0.0,
-      isExempt: false,
-      nights,
-      adultsCount: adults,
-      adultRate,
-      childrenCount: children,
-      childRate,
-      smallChildrenCount: smallChildren,
-      smallChildRate,
-      breakdown: 'Keine Übernachtungen oder steuerpflichtigen Personen',
-    };
-  }
-
-  const adultSum = roundToCent(adults * adultRate * nights);
-  const childSum = roundToCent(children * childRate * nights);
-  const smallChildSum = roundToCent(smallChildren * smallChildRate * nights);
-  const total = roundToCent(adultSum + childSum + smallChildSum);
-
-  const breakdownParts: string[] = [];
-  if (adults > 0) breakdownParts.push(`${adults} Erw. (${adultSum.toFixed(2)} €)`);
-  if (children > 0) breakdownParts.push(`${children} Kind(er) (${childSum.toFixed(2)} €)`);
-  if (smallChildren > 0) breakdownParts.push(`${smallChildren} Kind(er) < 6 J. (0,00 €)`);
-
-  return {
-    cityTaxAmount: total,
-    gaestetaxeAmount: total,
-    isExempt: false,
-    reason: undefined,
-    nights,
-    adultsCount: adults,
-    adultRate,
-    childrenCount: children,
-    childRate,
-    smallChildrenCount: smallChildren,
-    smallChildRate,
-    breakdown: `${nights} Übernachtung(en) [${breakdownParts.join(', ')}] = ${total.toFixed(2)} €`,
-  };
-}
-
-/**
- * @deprecated Übergangsfunktion: Frühere Leipziger Beherbergungssteuer (5% City Tax)
- * Wurde für Kurort Jonsdorf abgelöst durch `calculateJonsdorfGaestetaxe`.
- */
-export function calculateLeipzigCityTax(
-  lodgingGross: number,
-  isExempt: boolean = false,
-  exemptReason?: string | null,
-  taxRatePercent: number = 5.0
-): {
-  cityTaxAmount: number;
-  isExempt: boolean;
-  reason?: string;
-  basisAmount: number;
-} {
-  const basisAmount = roundToCent(Math.max(0, lodgingGross));
-
-  // Befreiungsprüfung
-  if (isExempt || (exemptReason && exemptReason.trim().length > 0)) {
-    return {
-      cityTaxAmount: 0.0,
-      isExempt: true,
-      reason: exemptReason || 'Befreit',
-      basisAmount,
-    };
-  }
-
-  if (basisAmount === 0 || taxRatePercent <= 0) {
-    return {
-      cityTaxAmount: 0.0,
-      isExempt: false,
-      basisAmount,
-    };
-  }
-
-  // Satzungsgemäße Abrundung auf volle Cent (Math.floor mit Epsilon)
-  const rawTax = basisAmount * (taxRatePercent / 100);
-  const cityTaxAmount = Math.floor((rawTax + 1e-9) * 100) / 100;
-
-  return {
-    cityTaxAmount,
-    isExempt: false,
-    basisAmount,
-  };
-}
 
 /**
  * Erstellt eine leere Folio-Zusammenfassung
@@ -331,9 +116,9 @@ function createEmptyFolioSummary(bucket: 'A' | 'B' | 'C'): FolioSummary {
  */
 export function calculateInvoiceSummary(
   items: InvoiceLineItem[],
-  isCityTaxExempt: boolean = false,
-  cityTaxExemptReason?: string | null,
-  cityTaxRatePercent: number = 5.0
+  _isCityTaxExempt?: boolean,
+  _cityTaxExemptReason?: string | null,
+  _cityTaxRatePercent?: number
 ): InvoiceTaxCalculation {
   const folios: Record<'A' | 'B' | 'C', FolioSummary> = {
     A: createEmptyFolioSummary('A'),
@@ -354,46 +139,25 @@ export function calculateInvoiceSummary(
       targetFolio.grossLodging = roundToCent(targetFolio.grossLodging + split.gross);
       targetFolio.netLodging = roundToCent(targetFolio.netLodging + split.net);
       targetFolio.taxLodging = roundToCent(targetFolio.taxLodging + split.tax);
-    } else if (item.taxType === 'SERVICE' || item.taxRate === 0.19) {
+    } else {
+      // SERVICE / F&B (19%)
       const split = calculateSplitTax(gross, 0.19);
       targetFolio.grossService = roundToCent(targetFolio.grossService + split.gross);
       targetFolio.netService = roundToCent(targetFolio.netService + split.net);
       targetFolio.taxService = roundToCent(targetFolio.taxService + split.tax);
-    } else if (item.taxType === 'CITY_TAX' || item.taxRate === 0.00) {
-      targetFolio.cityTaxAmount = roundToCent(targetFolio.cityTaxAmount + gross);
     }
   }
 
-  // 2. City Tax für Folios berechnen, falls noch nicht explizit als Posten vorhanden
-  // Wenn kein expliziter CITY_TAX Posten in den Items ist, berechnen wir die City Tax automatisch
-  const hasExplicitCityTaxItem = items.some((i) => i.taxType === 'CITY_TAX');
-
-  if (!hasExplicitCityTaxItem) {
-    // City Tax wird standardmäßig dem Folio B (Gastkonto) zugeordnet,
-    // falls Folio A die Logis trägt, oder direkt dem Folio, wo die Logis liegt.
-    for (const bucket of ['A', 'B', 'C'] as const) {
-      const folio = folios[bucket];
-      if (folio.grossLodging > 0) {
-        const cTax = calculateLeipzigCityTax(
-          folio.grossLodging,
-          isCityTaxExempt,
-          cityTaxExemptReason,
-          cityTaxRatePercent
-        );
-        folio.cityTaxAmount = roundToCent(cTax.cityTaxAmount);
-      }
-    }
-  }
-
-  // 3. Summen je Folio berechnen
+  // 2. Summen je Folio berechnen
   for (const bucket of ['A', 'B', 'C'] as const) {
     const f = folios[bucket];
-    f.totalNet = roundToCent(f.netLodging + f.netService + f.cityTaxAmount);
+    f.cityTaxAmount = 0.0;
+    f.totalNet = roundToCent(f.netLodging + f.netService);
     f.totalTax = roundToCent(f.taxLodging + f.taxService);
-    f.totalGross = roundToCent(f.grossLodging + f.grossService + f.cityTaxAmount);
+    f.totalGross = roundToCent(f.grossLodging + f.grossService);
   }
 
-  // 4. Gesamtsummen über alle Folios
+  // 3. Gesamtsummen über alle Folios
   const netLodging = roundToCent(folios.A.netLodging + folios.B.netLodging + folios.C.netLodging);
   const taxLodging = roundToCent(folios.A.taxLodging + folios.B.taxLodging + folios.C.taxLodging);
   const grossLodging = roundToCent(folios.A.grossLodging + folios.B.grossLodging + folios.C.grossLodging);
@@ -402,11 +166,11 @@ export function calculateInvoiceSummary(
   const taxService = roundToCent(folios.A.taxService + folios.B.taxService + folios.C.taxService);
   const grossService = roundToCent(folios.A.grossService + folios.B.grossService + folios.C.grossService);
 
-  const cityTaxAmount = roundToCent(folios.A.cityTaxAmount + folios.B.cityTaxAmount + folios.C.cityTaxAmount);
+  const cityTaxAmount = 0.0;
 
-  const totalNet = roundToCent(netLodging + netService + cityTaxAmount);
+  const totalNet = roundToCent(netLodging + netService);
   const totalTax = roundToCent(taxLodging + taxService);
-  const totalGross = roundToCent(grossLodging + grossService + cityTaxAmount);
+  const totalGross = roundToCent(grossLodging + grossService);
 
   return {
     netLodging,
@@ -430,7 +194,7 @@ export function calculateInvoiceSummary(
 /**
  * Standard-Aufteilung einer Hotelbuchung in Folio-Positionen:
  * - Folio A: Übernachtung (7% USt)
- * - Folio B: Frühstück / Verpflegung (19% USt) + Gästetaxe Kurort Jonsdorf (0% USt)
+ * - Folio B: Frühstück / Verpflegung (19% USt)
  */
 export function generateDefaultFolioItems(params: {
   guestName: string;
@@ -453,16 +217,10 @@ export function generateDefaultFolioItems(params: {
     roomCode,
     nights,
     lodgingPricePerNight,
-    adultsCount = 1,
-    childrenCount = 0,
-    smallChildrenCount = 0,
     breakfastCountTotal = 0,
     breakfastPricePerPerson = 12.5,
-    isCityTaxExempt = false,
-    cityTaxExemptReason = null,
     dateFrom,
     dateTo,
-    useLegacyLeipzigCityTax = false,
   } = params;
 
   const items: InvoiceLineItem[] = [];
@@ -504,63 +262,6 @@ export function generateDefaultFolioItems(params: {
       dateTo,
       infoNote: `${breakfastCountTotal} Portionen à ${breakfastPricePerPerson.toFixed(2)} €`,
     });
-  }
-
-  // 3. Posten: Gästetaxe Kurort Jonsdorf auf Folio B (Gastkonto)
-  if (useLegacyLeipzigCityTax) {
-    const cityTax = calculateLeipzigCityTax(
-      totalLodgingGross,
-      isCityTaxExempt,
-      cityTaxExemptReason
-    );
-    if (cityTax.cityTaxAmount > 0) {
-      items.push({
-        positionNumber: pos++,
-        folioBucket: 'B',
-        description: `Beherbergungssteuer Stadt Leipzig (5% auf ${totalLodgingGross.toFixed(2)} € Logis)`,
-        roomCode,
-        quantity: 1,
-        unitPriceGross: cityTax.cityTaxAmount,
-        totalGross: cityTax.cityTaxAmount,
-        taxRate: 0.00,
-        taxCode: 0,
-        taxType: 'CITY_TAX',
-        dateFrom,
-        dateTo,
-        infoNote: `Gesetzlich cent-abgerundet nach Satzung der Stadt Leipzig`,
-      });
-    }
-  } else {
-    const gaestetaxe = calculateJonsdorfGaestetaxe({
-      nights,
-      adultsCount,
-      childrenCount,
-      smallChildrenCount,
-      isExempt: isCityTaxExempt,
-      exemptReason: cityTaxExemptReason,
-    });
-
-    if (gaestetaxe.gaestetaxeAmount > 0) {
-      const breakdownParts: string[] = [];
-      if (adultsCount > 0) breakdownParts.push(`${adultsCount} Erw.`);
-      if (childrenCount > 0) breakdownParts.push(`${childrenCount} Kind(er)`);
-
-      items.push({
-        positionNumber: pos++,
-        folioBucket: 'B',
-        description: `Gästetaxe Kurort Jonsdorf (${nights} ÜN, ${breakdownParts.join(', ')})`,
-        roomCode,
-        quantity: 1,
-        unitPriceGross: gaestetaxe.gaestetaxeAmount,
-        totalGross: gaestetaxe.gaestetaxeAmount,
-        taxRate: 0.00,
-        taxCode: 0,
-        taxType: 'CITY_TAX',
-        dateFrom,
-        dateTo,
-        infoNote: `Satzung Gemeinde Kurort Jonsdorf vom 05.05.2025 (2,90 € Erw. / 1,45 € Kinder)`,
-      });
-    }
   }
 
   return items;

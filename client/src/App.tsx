@@ -75,7 +75,6 @@ export function sanitizeReservation(r: any): Reservation {
       lastName: r.last_name || '',
       firstName: r.first_name || '',
       isRegularGuest: false,
-      isTaxExempt: false,
     } : undefined),
     room: r.room || (r.room_code ? {
       id: roomId,
@@ -93,7 +92,7 @@ export function sanitizeReservation(r: any): Reservation {
   };
 }
 
-const CURRENT_DATA_VERSION = 'v2_10_october_bookings';
+const CURRENT_DATA_VERSION = 'v2_15_clean_invoices_folio_gobd_fix';
 
 export function App() {
   const [activeTab, setActiveTab] = useState<TabType>('timeline');
@@ -148,6 +147,8 @@ export function App() {
 
   const [loading, setLoading] = useState<boolean>(false);
   const [serverStatus, setServerStatus] = useState<'online' | 'offline'>('online');
+  const [lanConnected, setLanConnected] = useState<boolean>(false);
+  const [lanClientsCount, setLanClientsCount] = useState<number>(1);
   const [timelineViewMode, setTimelineViewMode] = useState<'timeline' | 'table'>('timeline');
 
   // Dialog states for Timeline & Global Reservations
@@ -218,6 +219,58 @@ export function App() {
     fetchData();
   }, [fetchData]);
 
+  // Multi-Client LAN Synchronisation via Server-Sent Events (SSE)
+  useEffect(() => {
+    let eventSource: EventSource | null = null;
+    let reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    const connectSSE = () => {
+      try {
+        eventSource = new EventSource('/api/events');
+
+        eventSource.onopen = () => {
+          setLanConnected(true);
+          setServerStatus('online');
+        };
+
+        eventSource.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === 'CONNECTED') {
+              setLanConnected(true);
+              if (data.clientsCount) setLanClientsCount(data.clientsCount);
+            } else if (
+              data.type === 'ROOMS_CHANGED' ||
+              data.type === 'GUESTS_CHANGED' ||
+              data.type === 'RESERVATIONS_CHANGED' ||
+              data.type === 'INVOICES_CHANGED'
+            ) {
+              fetchData();
+            }
+          } catch {
+            // Heartbeat oder Kommentar-Frame
+          }
+        };
+
+        eventSource.onerror = () => {
+          setLanConnected(false);
+          eventSource?.close();
+          reconnectTimeout = setTimeout(connectSSE, 4000);
+        };
+      } catch {
+        setLanConnected(false);
+        reconnectTimeout = setTimeout(connectSSE, 5000);
+      }
+    };
+
+    connectSSE();
+
+    return () => {
+      eventSource?.close();
+      if (reconnectTimeout) clearTimeout(reconnectTimeout);
+    };
+  }, [fetchData]);
+
   // Global Keyboard Navigation (F1 - F5 Modulwechsel)
   useKeyboardShortcuts({
     onF1: () => setActiveTab('timeline'),
@@ -226,7 +279,7 @@ export function App() {
     onF4: () => setActiveTab('invoices'),
   });
 
-  // Optimistischer CRUD Handler Gäste
+  // Optimistischer CRUD Handler Gäste mit atomarer SQLite-ID Synchronisation
   const handleSaveGuest = async (guestData: Partial<Guest>): Promise<Guest> => {
     let savedGuest: Guest;
     if (guestData.id) {
@@ -240,17 +293,27 @@ export function App() {
         localStorage.setItem('lindengarten_guests', JSON.stringify(next));
         return next;
       });
-      fetch(`/api/guests/${guestData.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(guestData),
-      }).catch((err) => console.warn('Backend sync PUT guest:', err));
+      try {
+        const res = await fetch(`/api/guests/${guestData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(guestData),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          if (updated && updated.id) {
+            savedGuest = { ...savedGuest, ...updated };
+          }
+        }
+      } catch (err) {
+        console.warn('Backend sync PUT guest:', err);
+      }
     } else {
-      // Neuen Gast optimistisch erstellen & sofort speichern
-      const newId = Math.max(0, ...guests.map((g) => g.id)) + 1;
+      // Neuen Gast optimistisch erstellen mit vorläufiger ID
+      const tempId = Math.max(0, ...guests.map((g) => g.id)) + 1;
       const nextNumber =
         guestData.guestNumber ||
-        `G-${new Date().getFullYear()}-${String(newId).padStart(4, '0')}`;
+        `G-${new Date().getFullYear()}-${String(tempId).padStart(4, '0')}`;
       savedGuest = {
         titleCode: 1,
         salutation: 'Sehr geehrter Herr',
@@ -260,25 +323,44 @@ export function App() {
         nationality: 'deutsch',
         paymentMethod: 'BAR',
         isRegularGuest: false,
-        isTaxExempt: false,
         createdAt: new Date().toISOString(),
         ...guestData,
-        id: newId,
+        id: tempId,
         guestNumber: nextNumber,
         searchName:
           guestData.searchName ||
           `${guestData.lastName || ''}, ${guestData.firstName || ''}`.trim(),
       } as Guest;
+
+      // Sofort optimistisch in State anzeigen
       setGuests((prev) => {
         const next = [savedGuest, ...prev];
         localStorage.setItem('lindengarten_guests', JSON.stringify(next));
         return next;
       });
-      fetch('/api/guests', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(savedGuest),
-      }).catch((err) => console.warn('Backend sync POST guest:', err));
+
+      // Backend anfragen und temporäre ID mit echter SQLite AUTOINCREMENT-ID abgleichen
+      try {
+        const { id: _, ...payload } = savedGuest;
+        const res = await fetch('/api/guests', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const backendGuest = await res.json();
+          if (backendGuest && backendGuest.id) {
+            savedGuest = backendGuest;
+            setGuests((prev) => {
+              const next = prev.map((g) => (g.id === tempId ? backendGuest : g));
+              localStorage.setItem('lindengarten_guests', JSON.stringify(next));
+              return next;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Backend sync POST guest:', err);
+      }
     }
     return savedGuest;
   };
@@ -338,13 +420,23 @@ export function App() {
         localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
         return next;
       });
-      fetch(`/api/reservations/${resData.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(resData),
-      }).catch((err) => console.warn('Backend sync PUT res:', err));
+      try {
+        const res = await fetch(`/api/reservations/${resData.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(resData),
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          if (updated && updated.id) {
+            savedRes = { ...savedRes, ...updated };
+          }
+        }
+      } catch (err) {
+        console.warn('Backend sync PUT res:', err);
+      }
     } else {
-      const newId = Math.max(0, ...reservations.map((r) => r.id)) + 1;
+      const tempId = Math.max(0, ...reservations.map((r) => r.id)) + 1;
       const nextResNumber =
         resData.reservationNumber || `18${Math.floor(100 + Math.random() * 900)}`;
       savedRes = {
@@ -367,7 +459,7 @@ export function App() {
         threeGangCount: resData.threeGangCount ?? 0,
         createdAt: new Date().toISOString(),
         ...resData,
-        id: newId,
+        id: tempId,
         guest: guestObj,
         room: roomObj,
         last_name: guestObj.lastName,
@@ -375,22 +467,42 @@ export function App() {
         room_name: roomObj?.name,
         room_code: roomObj?.roomCode,
       } as Reservation;
+
+      // Optimistisch anzeigen
       setReservations((prev) => {
         const next = [savedRes, ...prev];
         localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
         return next;
       });
-      fetch('/api/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(savedRes),
-      }).catch((err) => console.warn('Backend sync POST res:', err));
+
+      // Backend anfragen und temporäre ID mit echter SQLite AUTOINCREMENT-ID abgleichen
+      try {
+        const { id: _, ...payload } = savedRes;
+        const res = await fetch('/api/reservations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) {
+          const backendRes = await res.json();
+          if (backendRes && backendRes.id) {
+            savedRes = { ...savedRes, ...backendRes, guest: guestObj, room: roomObj };
+            setReservations((prev) => {
+              const next = prev.map((r) => (r.id === tempId ? savedRes : r));
+              localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
+              return next;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Backend sync POST res:', err);
+      }
     }
 
     // Automatische Rechnungserstellung & Synchronisation
     try {
       const existingInv = invoices.find((inv) => inv.reservationId === savedRes.id);
-      const autoInv = generateInvoiceFromReservation(savedRes, existingInv, guests, rooms);
+      const autoInv = generateInvoiceFromReservation(savedRes, existingInv, guests, rooms, priceVariants);
       setInvoices((prev) => {
         const idx = prev.findIndex((i) => i.reservationId === savedRes.id || i.id === autoInv.id);
         let next;
@@ -415,7 +527,8 @@ export function App() {
     return savedRes;
   };
 
-  const handleSaveInvoice = async (invoiceData: Invoice) => {
+  const handleSaveInvoice = async (invoiceData: Invoice): Promise<Invoice> => {
+    let currentSaved: Invoice = invoiceData;
     setInvoices((prev) => {
       const idx = prev.findIndex((i) => i.id === invoiceData.id || (invoiceData.invoiceNumber && i.invoiceNumber === invoiceData.invoiceNumber));
       let next;
@@ -429,11 +542,28 @@ export function App() {
       return next;
     });
 
-    fetch('/api/invoices', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(invoiceData),
-    }).catch((err) => console.warn('Backend sync invoice POST:', err));
+    try {
+      const res = await fetch('/api/invoices', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(invoiceData),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        if (saved && saved.id) {
+          currentSaved = saved;
+          setInvoices((prev) => {
+            const next = prev.map((inv) => (inv.id === saved.id || inv.invoiceNumber === saved.invoiceNumber) ? { ...inv, ...saved } : inv);
+            localStorage.setItem('lindengarten_invoices', JSON.stringify(next));
+            return next;
+          });
+        }
+      }
+    } catch (err) {
+      console.warn('Backend sync invoice POST:', err);
+    }
+
+    return currentSaved;
   };
 
   const handleDeleteInvoice = async (id: number) => {
@@ -468,6 +598,8 @@ export function App() {
         serverStatus={serverStatus}
         onRefresh={fetchData}
         isLoading={loading}
+        lanConnected={lanConnected}
+        lanClientsCount={lanClientsCount}
       />
 
       {/* 2. HAUPTBEREICH: JE NACH AKTIVEM MODUL-TAB */}
@@ -597,6 +729,7 @@ export function App() {
             reservations={reservations}
             rooms={rooms}
             guests={guests}
+            priceVariants={priceVariants}
             onSaveInvoice={handleSaveInvoice}
             onDeleteInvoice={handleDeleteInvoice}
             onRefresh={fetchData}
@@ -621,6 +754,7 @@ export function App() {
           rooms={rooms}
           guests={guests}
           priceVariants={priceVariants}
+          reservations={reservations}
           isOpen={isNewResOpen}
           onClose={() => {
             setIsNewResOpen(false);

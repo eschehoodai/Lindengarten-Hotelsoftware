@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import type { Reservation, Room } from '../../types';
 import { 
   CheckCircle2, Clock, Lock, Unlock, 
-  DoorClosed, X, Check
+  DoorClosed, X, Check, FileText
 } from 'lucide-react';
+import { MeldescheinPdfDocument } from '../pdf/MeldescheinPdfDocument';
+import type { Guest } from '../../types';
 
 interface StatusDialogProps {
   reservation: Reservation;
@@ -25,6 +27,18 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
   const [isWrittenReservation, setIsWrittenReservation] = useState<boolean>(reservation.isWrittenReservation);
   const [isLockedToRoom, setIsLockedToRoom] = useState<boolean>(reservation.isLockedToRoom);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [showMeldeschein, setShowMeldeschein] = useState<boolean>(false);
+
+  const meldescheinGuest: Guest = reservation.guest || {
+    id: reservation.guestId || 0,
+    guestNumber: `G-${reservation.guestId || '0000'}`,
+    searchName: `${reservation.last_name || ''}, ${reservation.first_name || ''}`,
+    titleCode: 1,
+    salutation: 'Sehr geehrte(r)',
+    lastName: reservation.last_name || '',
+    firstName: reservation.first_name || '',
+    isRegularGuest: false,
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -46,7 +60,14 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        if (showMeldeschein) {
+          setShowMeldeschein(false);
+        } else {
+          onClose();
+        }
+      } else if (e.key === 'F6') {
+        e.preventDefault();
+        setShowMeldeschein((prev) => !prev);
       } else if (e.key === 'Enter' || e.key === 'F9') {
         e.preventDefault();
         handleSave();
@@ -166,6 +187,22 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
                 </span>
               </button>
             </div>
+
+            {/* Quick-Action: Meldeschein nach Bundesmeldegesetz (§§ 29, 30 BMG) */}
+            <div className="pt-2 border-t border-slate-200 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                Meldepflicht nach § 30 BMG:
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowMeldeschein(true)}
+                className="flex items-center gap-1.5 bg-[#376189] hover:bg-[#2c4f70] text-white px-2.5 py-1 rounded text-xs font-semibold cursor-pointer shadow-xs transition-colors"
+                title="Amtlichen Meldeschein (§§ 29, 30 BMG) für diesen Check-In öffnen & drucken"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-300" />
+                <span>[F6] Meldeschein drucken</span>
+              </button>
+            </div>
           </div>
 
           {/* FLAGS & SPERREN (aus Bild 03) */}
@@ -246,6 +283,26 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
         </div>
 
       </div>
+
+      {/* MELDESCHEIN MODAL VORSCHAU */}
+      {showMeldeschein && (
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowMeldeschein(false);
+          }}
+          className="fixed inset-0 z-60 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+        >
+          <div className="relative max-h-[92vh] overflow-y-auto">
+            <MeldescheinPdfDocument
+              guest={meldescheinGuest}
+              reservation={reservation}
+              room={room}
+              onClose={() => setShowMeldeschein(false)}
+              onPrint={() => window.print()}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

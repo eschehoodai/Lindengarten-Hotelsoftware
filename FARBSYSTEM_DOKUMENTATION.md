@@ -97,13 +97,11 @@ Satte, aber blendfreie Signallichter zur sofortigen Zahlungskontrolle.
 
 ---
 
-### 2.6 Gästestamm & Gästetaxe (GuestsView)
+### 2.6 Gästestamm (GuestsView)
 
 | Eigenschaft | Farbmuster | Symbol | Klassen (Tailwind) | Bedeutung |
 | :--- | :---: | :--- | :--- | :--- |
 | **Stammgast** | ![#fcf3e6](./farbfelder/amber-100.svg) | `Star` (gefüllt) | `bg-[#fcf3e6] text-[#8c5820]` (Inaktiv) / `bg-[#d4973b] text-slate-900` (Selektiert) | Stammkunde des Hauses (warmes Honiggold). |
-| **Gästetaxe befreit** | ![#edf6f1](./farbfelder/emerald-100.svg) | Text "Befreit" | `bg-[#edf6f1] text-[#285740]` (Inaktiv) / `bg-[#2ea36f] text-slate-900` (Selektiert) | Befreiung gem. Satzung Kurort Jonsdorf (z.B. Merkzeichen "B"). |
-| **Gästetaxe normal** | ![#7f8c9b](./farbfelder/slate-400.svg) | Text "(2,90 €)" | `text-[#7f8c9b]` | Reguläre Abgabe 2,90 € / Nacht gem. Ortssatzung. |
 
 ---
 

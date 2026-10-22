@@ -1,0 +1,11 @@
+{
+  "baseUrl": "https://kassensichv-middleware.fiskaly.com",
+  "apiKey": "test_9kfwc1hrwo7x5siyutjkxx3mc_lindengarten-finanzamt-key",
+  "apiSecret": "1jS2GsWpFRk2iUkBYkLo8UkBJYQID5M6rUyqQyKNeNo",
+  "timeoutMs": 4000,
+  "clientSerial": "ERS-LINDENGARTEN-POS-01",
+  "tssId": "3c1c5e75-6f28-4611-8954-beede2018f9c",
+  "clientId": "a7992c42-ea06-423a-b262-c4a73c02ddde",
+  "adminPin": "1234567890",
+  "adminPuk": "6203668981"
+}

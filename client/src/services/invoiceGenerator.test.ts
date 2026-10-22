@@ -113,4 +113,93 @@ describe('invoiceGenerator Tests', () => {
     expect(freeInv.paymentMethod).toBe('BAR');
     expect(freeInv.totalGross).toBe(0);
   });
+
+  describe('Lindengarten F&B Frühstückssplit Logik', () => {
+    it('splittet bei "Doppelt belegt" 2x 4,80 € / Tag mit 19% MwSt aus dem Gesamtpreis heraus', () => {
+      const res: Reservation = {
+        ...mockReservation,
+        priceVariant: 'Doppelt belegt',
+        nights: 2,
+        pricePerNight: 85.0,
+        totalPrice: 170.0,
+      };
+
+      const inv = generateInvoiceFromReservation(res, null, [mockGuest], [mockRoom]);
+      // Anreisetag ohne Frühstück -> 2 Nächte = 2 Frühstückstage = 4 Frühstücke
+      // 4 x 4,80 € = 19,20 € (19% MwSt)
+      // Logis = 170,00 € - 19,20 € = 150,80 € (7% MwSt)
+      const logisItem = inv.items?.find((i) => i.taxType === 'LODGING');
+      const bfItem = inv.items?.find((i) => i.taxType === 'SERVICE' && i.description.includes('Frühstück'));
+
+      expect(logisItem).toBeDefined();
+      expect(bfItem).toBeDefined();
+      expect(bfItem?.quantity).toBe(4);
+      expect(bfItem?.unitPriceGross).toBe(4.80);
+      expect(bfItem?.totalGross).toBe(19.20);
+      expect(bfItem?.taxRate).toBe(0.19);
+
+      expect(logisItem?.totalGross).toBe(150.80);
+      expect(logisItem?.taxRate).toBe(0.07);
+
+      // Gesamtbetrag der beiden Positionen muss exakt 170,00 € betragen
+      expect((logisItem!.totalGross + bfItem!.totalGross)).toBe(170.0);
+    });
+
+    it('splittet bei "Einfach belegt" 1x 4,80 € / Tag mit 19% MwSt', () => {
+      const res: Reservation = {
+        ...mockReservation,
+        priceVariant: 'Einfach belegt',
+        nights: 3,
+        pricePerNight: 70.0,
+        totalPrice: 210.0,
+      };
+
+      const inv = generateInvoiceFromReservation(res, null, [mockGuest], [mockRoom]);
+      // 3 Nächte = 3 Frühstücke à 4,80 € = 14,40 €
+      // Logis = 210,00 € - 14,40 € = 195,60 €
+      const logisItem = inv.items?.find((i) => i.taxType === 'LODGING');
+      const bfItem = inv.items?.find((i) => i.taxType === 'SERVICE' && i.description.includes('Frühstück'));
+
+      expect(bfItem?.quantity).toBe(3);
+      expect(bfItem?.totalGross).toBe(14.40);
+      expect(logisItem?.totalGross).toBe(195.60);
+      expect((logisItem!.totalGross + bfItem!.totalGross)).toBe(210.0);
+    });
+
+    it('zieht bei "ohne F&B" kein Frühstück ab (100% Logis 7%)', () => {
+      const res: Reservation = {
+        ...mockReservation,
+        priceVariant: 'ohne F&B 1 Person',
+        nights: 2,
+        pricePerNight: 65.0,
+        totalPrice: 130.0,
+      };
+
+      const inv = generateInvoiceFromReservation(res, null, [mockGuest], [mockRoom]);
+      const bfItem = inv.items?.find((i) => i.taxType === 'SERVICE' && i.description.includes('Frühstück'));
+      const logisItem = inv.items?.find((i) => i.taxType === 'LODGING');
+
+      expect(bfItem).toBeUndefined();
+      expect(logisItem?.totalGross).toBe(130.0);
+      expect(logisItem?.taxRate).toBe(0.07);
+    });
+
+    it('markiert "Online" als vorläufig ohne Frühstücksabzug', () => {
+      const res: Reservation = {
+        ...mockReservation,
+        priceVariant: 'Online',
+        nights: 1,
+        pricePerNight: 95.0,
+        totalPrice: 95.0,
+      };
+
+      const inv = generateInvoiceFromReservation(res, null, [mockGuest], [mockRoom]);
+      const bfItem = inv.items?.find((i) => i.taxType === 'SERVICE' && i.description.includes('Frühstück'));
+      const logisItem = inv.items?.find((i) => i.taxType === 'LODGING');
+
+      expect(bfItem).toBeUndefined();
+      expect(logisItem?.totalGross).toBe(95.0);
+      expect(logisItem?.infoNote).toContain('Online-Import');
+    });
+  });
 });

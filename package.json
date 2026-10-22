@@ -3,6 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
+    "dev": "npx concurrently -k -n \"SERVER,CLIENT\" -c \"cyan.bold,green.bold\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "seed": "npm --prefix server run seed",

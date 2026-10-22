@@ -1,13 +1,12 @@
-import type { Reservation, Guest, Room, Invoice } from '../types';
+import type { Reservation, Guest, Room, Invoice, PriceVariant } from '../types';
 import { 
   type InvoiceLineItem, 
   calculateSplitTax, 
-  calculateJonsdorfGaestetaxe, 
   roundToCent 
 } from './taxEngine';
+import { HOTEL_CONFIG } from '../constants/hotelConfig';
 
-export const DEFAULT_CLOSING_TEXT = 
-  'Vielen Dank für Ihren Aufenthalt im Hotel Lindengarten! Wir hoffen, Sie hatten eine angenehme Zeit bei uns und beehren uns gerne wieder.';
+export const DEFAULT_CLOSING_TEXT = HOTEL_CONFIG.closingText;
 
 /**
  * Berechnet Summen und Steueranteile für eine Liste von Rechnungspositionen.
@@ -21,17 +20,13 @@ export function recalculateInvoiceTotals(items: InvoiceLineItem[]) {
   let taxService = 0;
   let grossService = 0;
 
-  let cityTaxAmount = 0;
-
   for (const item of items) {
     const total = roundToCent(item.totalGross || (item.quantity * item.unitPriceGross));
-    if (item.taxType === 'LODGING' || item.taxRate === 0.07) {
+    if (item.taxRate === 0.07 || item.taxType === 'LODGING') {
       const split = calculateSplitTax(total, 0.07);
       netLodging += split.net;
       taxLodging += split.tax;
       grossLodging += split.gross;
-    } else if (item.taxType === 'CITY_TAX' || item.taxRate === 0.0) {
-      cityTaxAmount += total;
     } else {
       // SERVICE / F&B (19%)
       const split = calculateSplitTax(total, 0.19);
@@ -41,15 +36,72 @@ export function recalculateInvoiceTotals(items: InvoiceLineItem[]) {
     }
   }
 
-  const totalGross = roundToCent(grossLodging + grossService + cityTaxAmount);
+  const totalGross = roundToCent(grossLodging + grossService);
 
   return {
     netLodging: roundToCent(netLodging),
     taxLodging: roundToCent(taxLodging),
     netService: roundToCent(netService),
     taxService: roundToCent(taxService),
-    cityTaxAmount: roundToCent(cityTaxAmount),
+    cityTaxAmount: 0,
     totalGross,
+  };
+}
+
+export interface BreakfastSplitConfig {
+  variantName?: string;
+  pricePerNight: number;
+  nights: number;
+  breakfastPersons?: number;
+  breakfastDays?: number;
+  breakfastRate?: number;
+}
+
+/**
+ * Berechnet den steuerrechtlichen Logis- und Frühstückssplit für Hotel Lindengarten.
+ * - Zimmerbasispreis enthält Logis (7% MwSt) und Frühstück (19% MwSt à 4,80 € / Person / Tag).
+ * - Anreisetag ab 15:00 Uhr hat kein Frühstück -> Tage entsprechen den Nächten.
+ * - Doppelt belegt: 2 Pers. (2x 4,80 €)
+ * - Einfach belegt: 1 Pers. (1x 4,80 €)
+ * - Dreifach belegt: 3 Pers. (3x 4,80 €)
+ * - ohne F&B: 0 Pers. (kein Abzug)
+ * - Online: Vorläufiger Importstatus
+ */
+export function calculateBreakfastSplit(config: BreakfastSplitConfig) {
+  const {
+    variantName = 'Doppelt belegt',
+    pricePerNight,
+    nights,
+    breakfastRate = 4.80,
+  } = config;
+
+  let persons = config.breakfastPersons;
+  if (persons === undefined) {
+    if (variantName.includes('Doppelt')) persons = 2;
+    else if (variantName.includes('Einfach')) persons = 1;
+    else if (variantName.includes('Dreifach')) persons = 3;
+    else if (variantName.includes('ohne F&B') || variantName === 'Ohne') persons = 0;
+    else if (variantName === 'Online') persons = 0;
+    else persons = 2; // Default
+  }
+
+  const days = Math.max(0, config.breakfastDays ?? nights);
+  const totalBreakfastCount = Math.max(0, persons * days);
+  const totalRoomGross = roundToCent(pricePerNight * nights);
+  const totalBreakfastGross = roundToCent(totalBreakfastCount * breakfastRate);
+  const totalLodgingGross = Math.max(0, roundToCent(totalRoomGross - totalBreakfastGross));
+  const lodgingUnitPrice = nights > 0 ? roundToCent(totalLodgingGross / nights) : totalLodgingGross;
+
+  return {
+    persons,
+    days,
+    breakfastRate,
+    totalBreakfastCount,
+    totalRoomGross,
+    totalBreakfastGross,
+    totalLodgingGross,
+    lodgingUnitPrice,
+    isOnline: variantName === 'Online',
   };
 }
 
@@ -60,7 +112,8 @@ export function generateInvoiceFromReservation(
   reservation: Reservation,
   existingInvoice?: Partial<Invoice> | null,
   guests: Guest[] = [],
-  rooms: Room[] = []
+  rooms: Room[] = [],
+  priceVariants: PriceVariant[] = []
 ): Invoice {
   const guest = reservation.guest || guests.find((g) => g.id === reservation.guestId);
   const room = reservation.room || rooms.find((r) => r.id === reservation.roomId);
@@ -126,89 +179,69 @@ export function generateInvoiceFromReservation(
       infoNote: it.infoNote || '',
     }));
   } else {
-    // 1. Position: Übernachtung Logis (7% USt)
     const unitPrice = reservation.pricePerNight || (reservation.totalPrice / Math.max(1, nights)) || 85.0;
-    const lodgingTotal = roundToCent(unitPrice * nights);
+    const variantName = reservation.priceVariant || 'Doppelt belegt';
+    const matchedVariant = priceVariants.find((pv) => pv.name === variantName || pv.shortCode === variantName);
 
+    const split = calculateBreakfastSplit({
+      variantName,
+      pricePerNight: unitPrice,
+      nights,
+      breakfastPersons: matchedVariant?.breakfastPersons,
+      breakfastDays: reservation.breakfastDays,
+      breakfastRate: matchedVariant?.breakfastRate,
+    });
+
+    let posCounter = 1;
+
+    // 1. Position: Übernachtung Logis (7% USt)
     items.push({
-      id: 1,
-      positionNumber: 1,
+      id: posCounter,
+      positionNumber: posCounter,
       folioBucket: 'A',
-      description: `Übernachtung ${roomName} (${reservation.priceVariant || 'Standard'})`,
+      description: `Übernachtung ${roomName} (${variantName})`,
       roomCode,
       quantity: nights,
-      unitPriceGross: unitPrice,
-      totalGross: lodgingTotal,
+      unitPriceGross: split.lodgingUnitPrice,
+      totalGross: split.totalLodgingGross,
       taxRate: 0.07,
       taxCode: 2,
       taxType: 'LODGING',
       dateFrom: reservation.arrivalDate,
       dateTo: reservation.departureDate,
-      infoNote: `${reservation.adultsCount || 2} Pers., ${nights} Übernachtung(en)`,
+      infoNote: split.totalBreakfastCount > 0
+        ? `Logis-Anteil (7% MwSt) nach Abzug von ${split.totalBreakfastCount}x Frühstück à ${split.breakfastRate.toFixed(2)} €`
+        : split.isOnline
+        ? `Online-Import (Logis 7% MwSt – bitte Belegungsvariante prüfen)`
+        : `Logis 7% MwSt (ohne Frühstück)`,
     });
+    posCounter++;
 
-    let posCounter = 2;
-
-    // 2. Position: Verpflegung / F&B (19% USt), falls gewählt und separat
-    if (reservation.boardType && reservation.boardType !== 'Ohne' && reservation.boardType !== 'Frühstück') {
-      const mealName = reservation.boardType === '2Gang' 
-        ? 'Halbpension 2-Gang Menü' 
-        : reservation.boardType === '3Gang' 
-        ? 'Halbpension 3-Gang Menü' 
-        : 'Oberlausitzer Halbpension (OHP)';
-      
-      const mealQuantity = (reservation.twoGangCount || reservation.threeGangCount || reservation.ohpCount || reservation.adultsCount || 1) * nights;
-      const mealUnitPrice = reservation.boardType === '3Gang' ? 24.50 : 18.50;
-      
-      if (!reservation.isFlatRate) {
-        items.push({
-          id: posCounter,
-          positionNumber: posCounter,
-          folioBucket: 'A',
-          description: `${mealName}`,
-          roomCode,
-          quantity: mealQuantity,
-          unitPriceGross: mealUnitPrice,
-          totalGross: roundToCent(mealQuantity * mealUnitPrice),
-          taxRate: 0.19,
-          taxCode: 1,
-          taxType: 'SERVICE',
-          dateFrom: reservation.arrivalDate,
-          dateTo: reservation.departureDate,
-          infoNote: `${reservation.boardType} für ${reservation.adultsCount || 1} Person(en)`,
-        });
-        posCounter++;
-      }
-    }
-
-    // 3. Position: Gästetaxe Kurort Jonsdorf (0% USt)
-    const jonsdorfTax = calculateJonsdorfGaestetaxe({
-      nights,
-      adultsCount: reservation.adultsCount || 2,
-      childrenCount: reservation.childrenCount || 0,
-      isExempt: guest?.isTaxExempt || false,
-      exemptReason: guest?.taxExemptReason,
-    });
-
-    if (jonsdorfTax.gaestetaxeAmount > 0) {
+    // 2. Position: Frühstücksbuffet (19% USt), falls Frühstück inkludiert
+    if (split.totalBreakfastCount > 0) {
       items.push({
         id: posCounter,
         positionNumber: posCounter,
         folioBucket: 'A',
-        description: 'Gästetaxe Kurort Jonsdorf (0% MwSt gem. Satzung)',
+        description: `Frühstücksbuffet (${split.persons} Pers. x ${split.days} Tage)`,
         roomCode,
-        quantity: nights,
-        unitPriceGross: roundToCent(jonsdorfTax.gaestetaxeAmount / Math.max(1, nights)),
-        totalGross: roundToCent(jonsdorfTax.gaestetaxeAmount),
-        taxRate: 0.00,
-        taxCode: 0,
-        taxType: 'CITY_TAX',
+        quantity: split.totalBreakfastCount,
+        unitPriceGross: split.breakfastRate,
+        totalGross: split.totalBreakfastGross,
+        taxRate: 0.19,
+        taxCode: 1,
+        taxType: 'SERVICE',
         dateFrom: reservation.arrivalDate,
         dateTo: reservation.departureDate,
-        infoNote: jonsdorfTax.breakdown || `${reservation.adultsCount || 2} Erw., ${reservation.childrenCount || 0} Kinder`,
+        infoNote: `F&B-Bewirtung (19% MwSt, Anreisetag ab 15:00 Uhr ohne Frühstück)`,
       });
       posCounter++;
     }
+
+    // Hinweis: Die Verpflegungsmatrix dient als reine Personal-Information (Küche & Service)
+    // und erzeugt keine automatischen Rechnungsaufschläge mehr. Zusätzliche F&B-Verzehre
+    // werden bei Bedarf manuell über das Folio-Konto bzw. die Kasse als Position erfasst.
+
   }
 
   // Summen berechnen
@@ -243,8 +276,8 @@ export function generateInvoiceFromReservation(
     closingText: existingInvoice?.closingText || DEFAULT_CLOSING_TEXT,
     paymentMethod: existingInvoice?.paymentMethod || guest?.paymentMethod || 'BAR',
     isPaid: existingInvoice?.isPaid ?? false,
-    status: existingInvoice?.status || 'final',
-    tseTransactionId: existingInvoice?.tseTransactionId || `TSE-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+    status: existingInvoice?.status || (existingInvoice?.isPaid ? 'BEZAHLT' : 'OFFEN'),
+    tseTransactionId: existingInvoice?.tseTransactionId || undefined,
     guest,
     reservation,
   };
@@ -319,8 +352,8 @@ export function createAdditionalInvoice(
     closingText: DEFAULT_CLOSING_TEXT,
     paymentMethod: guest?.paymentMethod || 'BAR',
     isPaid: false,
-    status: 'final',
-    tseTransactionId: `TSE-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+    status: 'OFFEN',
+    tseTransactionId: undefined,
     guest,
     reservation,
   };
@@ -382,8 +415,8 @@ export function createFreeInvoice(presetGuest?: Guest | null): Invoice {
     closingText: DEFAULT_CLOSING_TEXT,
     paymentMethod: 'BAR',
     isPaid: false,
-    status: 'final',
-    tseTransactionId: `TSE-2026-${Math.floor(100000 + Math.random() * 900000)}`,
+    status: 'OFFEN',
+    tseTransactionId: undefined,
     guest: presetGuest || undefined,
   };
 
