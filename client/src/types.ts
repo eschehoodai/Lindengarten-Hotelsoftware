@@ -48,7 +48,7 @@ export interface Reservation {
   id: number;
   reservationNumber: string;
   guestId: number;
-  roomId: number;
+  roomId: number | null; // Nullable für Zimmer-Tetris / Unzugewiesene Online-Buchungen
   arrivalDate: string;
   departureDate: string;
   nights: number;
@@ -76,7 +76,16 @@ export interface Reservation {
   dailyArrangement?: string;
   billingDebitor?: string;
   notes?: string;
-  
+
+  // DIRS21 Channel Manager & Status
+  status?: 'confirmed' | 'cancelled' | 'unassigned' | string;
+  categoryCode?: string;
+  category_code?: string;
+  externalReservationId?: string;
+  channelSource?: string;
+  otaConfirmationCode?: string;
+  lastSyncedAt?: string;
+
   // Joins
   guest?: Guest;
   room?: Room;
@@ -86,6 +95,8 @@ export interface Reservation {
   room_code?: string;
   room_name?: string;
 }
+
+
 
 export interface BoardOption {
   id: string;
@@ -197,4 +208,48 @@ export interface Invoice {
 }
 
 export const APP_VERSION = '2.0';
+
+// ==========================================
+// DIRS21 CHANNEL MANAGER TYPEN (2-WEGE LIGHT)
+// ==========================================
+
+export interface Dirs21Config {
+  channel: string;
+  hotelId: string;
+  username: string;
+  password?: string;
+  endpointUrl: string;
+  environment: 'mock' | 'sandbox' | 'production';
+  isActive: boolean;
+  pollingIntervalSeconds: number;
+  syncIntervalSeconds: number;
+  syncLookaheadDays: number;
+  updatedAt: string;
+}
+
+export interface ChannelRoomMapping {
+  id: number;
+  channel: string;
+  categoryCode: string;
+  categoryName: string;
+  channelRoomId: string;
+  channelRoomName: string;
+  isActive: boolean;
+  updatedAt: string;
+}
+
+export interface ChannelSyncLog {
+  id: number;
+  channel: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  action: string;
+  endpointUrl: string;
+  requestPayload: string;
+  responsePayload?: string;
+  responseStatus?: number;
+  durationMs: number;
+  status: 'SUCCESS' | 'ERROR';
+  errorMessage?: string;
+  createdAt: string;
+}
 

@@ -250,8 +250,8 @@ export const StatusDialog: React.FC<StatusDialogProps> = ({
                     </span>
                     <span className="text-[10px] text-slate-500">
                       {isLockedToRoom 
-                        ? 'Buchung ist auf dieses Zimmer fixiert und wird im Belegungsplan gegen Drag-and-Drop geschützt.' 
-                        : 'Buchung kann im Belegungsplan frei auf andere gleichwertige Zimmer verschoben werden.'}
+                        ? 'Buchung ist auf dieses Zimmer fixiert und wird im Belegungsplan gegen versehentliches Umbelegen geschützt.' 
+                        : 'Buchung kann im Belegungsplan per Buchungsmaske frei auf andere gleichwertige Zimmer umgebucht werden.'}
                     </span>
                   </div>
                 </div>

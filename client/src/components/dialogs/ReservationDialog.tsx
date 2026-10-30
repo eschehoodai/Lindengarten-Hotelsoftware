@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { calculateSplitTax } from '../../services/taxEngine';
 import { calculateBreakfastSplit } from '../../services/invoiceGenerator';
+import { fetchPreviewNumber, calculateNextReservationNumber } from '../../services/sequenceClient';
 
 interface ReservationDialogProps {
   reservation: Partial<Reservation> | null;
@@ -35,7 +36,8 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
   useEffect(() => {
     const today = new Date().toISOString().split('T')[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const nextResNumber = reservation?.reservationNumber || `18${Math.floor(100 + Math.random() * 900)}`;
+    const fallbackNext = calculateNextReservationNumber(reservations || []);
+    const nextResNumber = reservation?.reservationNumber || fallbackNext;
 
     const defaultRoom = (reservation?.roomId && rooms.find((r) => r.id === reservation.roomId)) || rooms[0];
     const defaultGuest = (reservation?.guestId && guests.find((g) => g.id === reservation.guestId)) || guests[0];
@@ -82,6 +84,18 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
     } else {
       setFormData(defaults);
     }
+
+    if (!reservation?.reservationNumber) {
+      let isCancelled = false;
+      fetchPreviewNumber('RESERVATION').then((num) => {
+        if (!isCancelled && num) {
+          setFormData((prev) => ({ ...prev, reservationNumber: num }));
+        }
+      });
+      return () => {
+        isCancelled = true;
+      };
+    }
   }, [reservation, rooms, guests, isOpen]);
 
   if (!isOpen) return null;
@@ -108,17 +122,25 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
     }));
   };
 
-  // Zimmerwechsel aktualisiert Basispreis
+  // Zimmerwechsel aktualisiert Basispreis und Status
   const handleRoomChange = (roomId: number) => {
     const selectedRoom = rooms.find((r) => r.id === roomId);
     const price = selectedRoom ? selectedRoom.basePrice : 85.0;
     const nights = formData.nights || 1;
-    setFormData((prev) => ({
-      ...prev,
-      roomId,
-      pricePerNight: price,
-      totalPrice: prev.isFlatRate ? (prev.totalPrice || price) : nights * price,
-    }));
+    setFormData((prev) => {
+      let notes = prev.notes || '';
+      if (roomId > 0 && notes.includes('ONLINE-BUCHUNG UNZUGEWIESEN')) {
+        notes = notes.replace(/⚠️ ONLINE-BUCHUNG UNZUGEWIESEN:.*?(?=\n|$)/g, `Online-Buchung (${prev.channelSource || 'DIRS21'}) manuell zugewiesen an Zimmer ${selectedRoom?.roomCode || roomId}.`).trim();
+      }
+      return {
+        ...prev,
+        roomId: roomId > 0 ? roomId : null,
+        status: roomId > 0 ? 'confirmed' : 'unassigned',
+        notes,
+        pricePerNight: price,
+        totalPrice: prev.isFlatRate ? (prev.totalPrice || price) : nights * price,
+      };
+    });
   };
 
   const handlePriceVariantChange = (selectedVariantName: string) => {
@@ -217,8 +239,20 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
       }
     }
 
+    const nextStatus = (formData.roomId && Number(formData.roomId) > 0)
+      ? (formData.status === 'unassigned' || !formData.status ? 'confirmed' : formData.status)
+      : 'unassigned';
+
+    let notes = formData.notes || '';
+    if (formData.roomId && Number(formData.roomId) > 0 && notes.includes('ONLINE-BUCHUNG UNZUGEWIESEN')) {
+      const assignedRoom = rooms.find((r) => r.id === formData.roomId);
+      notes = notes.replace(/⚠️ ONLINE-BUCHUNG UNZUGEWIESEN:.*?(?=\n|$)/g, `Online-Buchung (${formData.channelSource || 'DIRS21'}) manuell zugewiesen an Zimmer ${assignedRoom?.roomCode || formData.roomId}.`).trim();
+    }
+
     const payload: Partial<Reservation> = {
       ...formData,
+      status: nextStatus,
+      notes,
       boardType: formData.boardType !== undefined ? formData.boardType : (activeBoardTypes.join(', ') || 'Frühstück'),
       dailyArrangement: formData.dailyArrangement !== undefined ? formData.dailyArrangement : (activeBoardTypes.join(', ') || 'Frühstück'),
     };
@@ -314,6 +348,9 @@ export const ReservationDialog: React.FC<ReservationDialogProps> = ({
                 onChange={(e) => handleRoomChange(Number(e.target.value))}
                 className="bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-bold text-[#1b2b3d] shadow-2xs"
               >
+                {(!formData.roomId || Number(formData.roomId) === 0) && (
+                  <option value="">-- Zimmer auswählen (Aktuell unzugewiesen) --</option>
+                )}
                 {rooms.map((r) => (
                   <option key={r.id} value={r.id}>
                     [{r.roomCode}] {r.name} - {r.categoryCode} ({r.baseBeds} Betten, Basis: {(Number(r.basePrice) || 0).toFixed(2)} €)

@@ -12,7 +12,7 @@ Das System ist für den **parallelen Mehrplatz-Betrieb (Multi-Client LAN)** an 2
 | :--- | :--- | :--- |
 | **Frontend** | **React 19 + TypeScript** | Typsicher, performant, keine störenden Außen-Scrollbalken |
 | **Styling** | **Tailwind CSS v4** | CSS Grid Layouts, Master-Detail Split-Screen, hohe Datendichte |
-| **Timeline & DnD** | **@dnd-kit/core** | 2D-Zimmerbelegungsplan, Kollisionserkennung & Buchungsschutz |
+| **Timeline & Matrix** | **CSS Grid & React Modals** | 2D-Zimmerbelegungsplan, Kollisionserkennung & Buchungsschutz |
 | **Backend & API** | **Node.js (TypeScript) + Express** | RESTful LAN-Server auf Port 3001 |
 | **Datenbank & ORM** | **SQLite / LibSQL + Drizzle ORM** | Schnelle, dateibasierte LAN-Datenbank (`lindengarten.db`) |
 | **Testing** | **Vitest** | 100% Testabdeckung der Steuer- und Rundungslogik |
@@ -48,10 +48,10 @@ Das System ist für den **parallelen Mehrplatz-Betrieb (Multi-Client LAN)** an 2
   - Vertikal: Alle 14 Lindengarten Zimmer mit Housekeeping-Zustand.
   - Horizontal: Kalendertage mit **signalrot markierten Samstagen und Sonntagen** (`Sa`/`So`).
   - Buchungsbalken mit Gastname, Nächteanzahl, Buchungsstatus `[r]` (Magenta) und Sperr-Icon 🔒.
-- **Drag-and-Drop mit `@dnd-kit/core`:**
-  - Buchungen können per DnD auf andere Zimmer verschoben werden.
-  - Fest gebuchte Zimmer (`isLockedToRoom`) sperren Drag-and-Drop.
-  - Striktes Verhindern von Doppelbelegungen durch Kollisionsprüfung.
+- **Zimmerbelegung & Buchungsschutz:**
+  - Buchungen können per Detailmaske (Doppelklick / F9) flexibel auf freie Zimmer umgebucht werden.
+  - Fest gebuchte Zimmer (`isLockedToRoom`) sperren versehentliches Umbelegen.
+  - Striktes Verhindern von Doppelbelegungen durch integrierte Kollisionsprüfung.
 - **Schnellinfo-Bar:** Live-Statuszeile am unteren Bildschirmrand.
 - **Ansichts-Umschalter:** 1-Klick-Wechsel zwischen 2D-Timeline und tabellarischer Buchungsliste.
 

@@ -18,7 +18,7 @@ export const FALLBACK_ROOMS = [
 export const FALLBACK_GUESTS = [
   {
     id: 1,
-    guestNumber: '178847',
+    guestNumber: 'G-000001',
     searchName: 'David',
     titleCode: 1,
     salutation: 'Sehr geehrter Herr',
@@ -36,7 +36,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 2,
-    guestNumber: '18506',
+    guestNumber: 'G-000002',
     searchName: 'Junghans',
     titleCode: 3,
     salutation: 'Sehr geehrte Familie',
@@ -54,7 +54,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 3,
-    guestNumber: '117799',
+    guestNumber: 'G-000003',
     searchName: 'Hanse Touristik',
     titleCode: 4,
     salutation: 'Sehr geehrte Damen und Herren',
@@ -73,7 +73,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 4,
-    guestNumber: '18531',
+    guestNumber: 'G-000004',
     searchName: 'Bergmann',
     titleCode: 7,
     salutation: 'Sehr geehrte Frau Dr.',
@@ -91,7 +91,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 5,
-    guestNumber: '18532',
+    guestNumber: 'G-000005',
     searchName: 'Buchenau',
     titleCode: 1,
     salutation: 'Sehr geehrter Herr',
@@ -109,7 +109,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 6,
-    guestNumber: '18533',
+    guestNumber: 'G-000006',
     searchName: 'Klein',
     titleCode: 3,
     salutation: 'Sehr geehrte Familie',
@@ -127,7 +127,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 7,
-    guestNumber: '18534',
+    guestNumber: 'G-000007',
     searchName: 'Weber',
     titleCode: 8,
     salutation: 'Sehr geehrter Herr Prof.',
@@ -145,7 +145,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 8,
-    guestNumber: '18535',
+    guestNumber: 'G-000008',
     searchName: 'Sonnenschein',
     titleCode: 2,
     salutation: 'Sehr geehrte Frau',
@@ -163,7 +163,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 9,
-    guestNumber: '18536',
+    guestNumber: 'G-000009',
     searchName: 'Wunderlich',
     titleCode: 1,
     salutation: 'Sehr geehrter Herr',
@@ -181,7 +181,7 @@ export const FALLBACK_GUESTS = [
   },
   {
     id: 10,
-    guestNumber: '18537',
+    guestNumber: 'G-000010',
     searchName: 'Meister',
     titleCode: 3,
     salutation: 'Sehr geehrte Familie',
@@ -202,7 +202,7 @@ export const FALLBACK_GUESTS = [
 export const FALLBACK_RESERVATIONS = [
   {
     id: 1,
-    reservationNumber: '19101',
+    reservationNumber: 'B-2026-000001',
     guestId: 4,
     roomId: 6, // Zimmer Annie
     arrivalDate: '2026-10-02',
@@ -232,7 +232,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 2,
-    reservationNumber: '19102',
+    reservationNumber: 'B-2026-000002',
     guestId: 1,
     roomId: 13, // Gesinde Kammer
     arrivalDate: '2026-10-04',
@@ -261,7 +261,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 3,
-    reservationNumber: '19103',
+    reservationNumber: 'B-2026-000003',
     guestId: 3,
     roomId: 12, // Heuboden Suite
     arrivalDate: '2026-10-05',
@@ -292,7 +292,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 4,
-    reservationNumber: '19104',
+    reservationNumber: 'B-2026-000004',
     guestId: 2,
     roomId: 10, // Scheune Suite
     arrivalDate: '2026-10-08',
@@ -323,7 +323,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 5,
-    reservationNumber: '19105',
+    reservationNumber: 'B-2026-000005',
     guestId: 8,
     roomId: 4, // Zimmer 5
     arrivalDate: '2026-10-10',
@@ -353,7 +353,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 6,
-    reservationNumber: '19106',
+    reservationNumber: 'B-2026-000006',
     guestId: 5,
     roomId: 5, // Zimmer Tobias
     arrivalDate: '2026-10-12',
@@ -382,7 +382,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 7,
-    reservationNumber: '19107',
+    reservationNumber: 'B-2026-000007',
     guestId: 9,
     roomId: 11, // Schuppen
     arrivalDate: '2026-10-15',
@@ -411,7 +411,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 8,
-    reservationNumber: '19108',
+    reservationNumber: 'B-2026-000008',
     guestId: 7,
     roomId: 8, // Prinzessin von Sachsen Stube
     arrivalDate: '2026-10-17',
@@ -442,7 +442,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 9,
-    reservationNumber: '19109',
+    reservationNumber: 'B-2026-000009',
     guestId: 6,
     roomId: 9, // Stall Suite
     arrivalDate: '2026-10-20',
@@ -472,7 +472,7 @@ export const FALLBACK_RESERVATIONS = [
   },
   {
     id: 10,
-    reservationNumber: '19110',
+    reservationNumber: 'B-2026-000010',
     guestId: 10,
     roomId: 14, // Suite Luisa
     arrivalDate: '2026-10-22',
@@ -526,7 +526,7 @@ export const FALLBACK_SALUTATIONS = [
 export const FALLBACK_INVOICES = [
   {
     id: 1,
-    invoiceNumber: '117810',
+    invoiceNumber: 'RE-2026-000001',
     reservationId: 1,
     guestId: 4,
     invoiceDate: '2026-10-06',
@@ -583,7 +583,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 2,
-    invoiceNumber: '117811',
+    invoiceNumber: 'RE-2026-000002',
     reservationId: 2,
     guestId: 1,
     invoiceDate: '2026-10-09',
@@ -623,7 +623,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 3,
-    invoiceNumber: 'RE-19103',
+    invoiceNumber: 'RE-2026-000003',
     reservationId: 3,
     guestId: 3,
     invoiceDate: '2026-10-12',
@@ -679,7 +679,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 4,
-    invoiceNumber: 'RE-19104',
+    invoiceNumber: 'RE-2026-000004',
     reservationId: 4,
     guestId: 2,
     invoiceDate: '2026-10-15',
@@ -752,7 +752,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 5,
-    invoiceNumber: 'RE-19105',
+    invoiceNumber: 'RE-2026-000005',
     reservationId: 5,
     guestId: 8,
     invoiceDate: '2026-10-14',
@@ -808,7 +808,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 6,
-    invoiceNumber: 'RE-19106',
+    invoiceNumber: 'RE-2026-000006',
     reservationId: 6,
     guestId: 5,
     invoiceDate: '2026-10-17',
@@ -864,7 +864,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 7,
-    invoiceNumber: 'RE-19107',
+    invoiceNumber: 'RE-2026-000007',
     reservationId: 7,
     guestId: 9,
     invoiceDate: '2026-10-21',
@@ -920,7 +920,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 8,
-    invoiceNumber: 'RE-19108',
+    invoiceNumber: 'RE-2026-000008',
     reservationId: 8,
     guestId: 7,
     invoiceDate: '2026-10-24',
@@ -976,7 +976,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 9,
-    invoiceNumber: 'RE-19109',
+    invoiceNumber: 'RE-2026-000009',
     reservationId: 9,
     guestId: 6,
     invoiceDate: '2026-10-26',
@@ -1032,7 +1032,7 @@ export const FALLBACK_INVOICES = [
   },
   {
     id: 10,
-    invoiceNumber: 'RE-19110',
+    invoiceNumber: 'RE-2026-000010',
     reservationId: 10,
     guestId: 10,
     invoiceDate: '2026-10-29',

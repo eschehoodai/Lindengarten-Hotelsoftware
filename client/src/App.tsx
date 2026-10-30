@@ -19,6 +19,7 @@ import { StatusDialog } from './components/dialogs/StatusDialog';
 import { ReservationDialog } from './components/dialogs/ReservationDialog';
 import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { generateInvoiceFromReservation } from './services/invoiceGenerator';
+import { calculateNextGuestNumber, calculateNextReservationNumber } from './services/sequenceClient';
 import { 
   Calendar, Users, DoorClosed, FileText, Settings, 
   Layers, Lock, AlertTriangle, CheckCircle, SplitSquareVertical,
@@ -26,7 +27,8 @@ import {
 } from 'lucide-react';
 
 export function sanitizeReservation(r: any): Reservation {
-  const roomId = Number(r.roomId ?? r.room_id) || 0;
+  const rawRoomId = r.roomId !== undefined ? r.roomId : r.room_id;
+  const roomId = (rawRoomId === null || rawRoomId === '' || rawRoomId === 0) ? null : Number(rawRoomId);
   const guestId = Number(r.guestId ?? r.guest_id) || 0;
   const nights = Number(r.nights) || 1;
   const pricePerNight = Number(r.pricePerNight ?? r.price_per_night) || 85;
@@ -38,6 +40,13 @@ export function sanitizeReservation(r: any): Reservation {
     reservationNumber: String(r.reservationNumber ?? r.reservation_number ?? ''),
     guestId,
     roomId,
+    status: (roomId === null || roomId === 0)
+      ? 'unassigned'
+      : (r.status === 'unassigned' || !r.status ? 'confirmed' : r.status),
+    externalReservationId: r.externalReservationId ?? r.external_reservation_id,
+    channelSource: r.channelSource ?? r.channel_source,
+    otaConfirmationCode: r.otaConfirmationCode ?? r.ota_confirmation_code,
+    lastSyncedAt: r.lastSyncedAt ?? r.last_synced_at,
     arrivalDate: String(r.arrivalDate ?? r.arrival_date ?? ''),
     departureDate: String(r.departureDate ?? r.departure_date ?? ''),
     nights,
@@ -311,9 +320,7 @@ export function App() {
     } else {
       // Neuen Gast optimistisch erstellen mit vorläufiger ID
       const tempId = Math.max(0, ...guests.map((g) => g.id)) + 1;
-      const nextNumber =
-        guestData.guestNumber ||
-        `G-${new Date().getFullYear()}-${String(tempId).padStart(4, '0')}`;
+      const nextNumber = guestData.guestNumber || calculateNextGuestNumber(guests);
       savedGuest = {
         titleCode: 1,
         salutation: 'Sehr geehrter Herr',
@@ -405,9 +412,13 @@ export function App() {
     const roomObj = rooms.find((r) => r.id === resData.roomId) || rooms[0];
 
     if (resData.id) {
+      const targetRoomId = (resData.roomId === null || resData.roomId === 0) ? null : resData.roomId;
+      const targetStatus = targetRoomId ? (resData.status === 'unassigned' || !resData.status ? 'confirmed' : resData.status) : 'unassigned';
       savedRes = {
         ...(reservations.find((r) => r.id === resData.id) || {}),
         ...resData,
+        roomId: targetRoomId,
+        status: targetStatus,
         guest: guestObj,
         room: roomObj,
         last_name: guestObj.lastName,
@@ -424,7 +435,7 @@ export function App() {
         const res = await fetch(`/api/reservations/${resData.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(resData),
+          body: JSON.stringify({ ...resData, roomId: targetRoomId, status: targetStatus }),
         });
         if (res.ok) {
           const updated = await res.json();
@@ -438,7 +449,7 @@ export function App() {
     } else {
       const tempId = Math.max(0, ...reservations.map((r) => r.id)) + 1;
       const nextResNumber =
-        resData.reservationNumber || `18${Math.floor(100 + Math.random() * 900)}`;
+        resData.reservationNumber || calculateNextReservationNumber(reservations);
       savedRes = {
         reservationNumber: nextResNumber,
         guestId: guestObj.id,
@@ -583,9 +594,19 @@ export function App() {
       localStorage.setItem('lindengarten_reservations', JSON.stringify(next));
       return next;
     });
-    fetch(`/api/reservations/${id}`, { method: 'DELETE' }).catch((err) =>
-      console.warn('Backend sync DELETE res:', err)
-    );
+    setInvoices((prev) => {
+      const next = prev.filter((i) => i.reservationId !== id);
+      localStorage.setItem('lindengarten_invoices', JSON.stringify(next));
+      return next;
+    });
+    try {
+      const res = await fetch(`/api/reservations/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        console.warn('Backend sync DELETE res status:', res.status);
+      }
+    } catch (err) {
+      console.warn('Backend sync DELETE res error:', err);
+    }
   };
 
   return (

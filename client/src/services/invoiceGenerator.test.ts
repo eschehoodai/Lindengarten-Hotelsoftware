@@ -42,7 +42,7 @@ describe('invoiceGenerator Tests', () => {
 
   const mockReservation: Reservation = {
     id: 100,
-    reservationNumber: '18550',
+    reservationNumber: 'B-2026-000001',
     guestId: 10,
     roomId: 3,
     arrivalDate: '2026-10-15',
@@ -67,7 +67,7 @@ describe('invoiceGenerator Tests', () => {
 
   it('generiert eine Standard-Hauptrechnung aus einer Reservierung', () => {
     const inv = generateInvoiceFromReservation(mockReservation, null, [mockGuest], [mockRoom]);
-    expect(inv.invoiceNumber).toBe('RE-18550');
+    expect(inv.invoiceNumber).toBe('RE-2026-000001');
     expect(inv.reservationId).toBe(100);
     expect(inv.recipientName).toBe('Max Mustermann');
     expect(inv.items).toBeDefined();
@@ -79,7 +79,7 @@ describe('invoiceGenerator Tests', () => {
     const mainInv = generateInvoiceFromReservation(mockReservation, null, [mockGuest], [mockRoom]);
     const secondInv = createAdditionalInvoice(mockReservation, [mainInv], [mockGuest], [mockRoom]);
 
-    expect(secondInv.invoiceNumber).toBe('RE-18550-2');
+    expect(secondInv.invoiceNumber).toBe('RE-2026-000001-2');
     expect(secondInv.reservationId).toBe(100);
     expect(secondInv.recipientName).toBe('Max Mustermann');
     expect(secondInv.items).toEqual([]);
@@ -107,7 +107,7 @@ describe('invoiceGenerator Tests', () => {
   it('erstellt eine freie Kassenrechnung ohne Bindung an eine Reservierung', () => {
     const freeInv = createFreeInvoice();
     expect(freeInv.reservationId).toBeUndefined();
-    expect(freeInv.invoiceNumber).toContain('RE-KASSE-');
+    expect(freeInv.invoiceNumber).toContain('KB-');
     expect(freeInv.roomName).toContain('Kasse');
     expect(freeInv.recipientName).toBe('Barzahler / Kassenkunde');
     expect(freeInv.paymentMethod).toBe('BAR');

@@ -53,10 +53,10 @@ Ersetzt das grelle Neon-Kobaltblau durch ein gediegenes, ruhiges Schieferblau.
 | ![#264563](./farbfelder/blue-800.svg) | `bg-blue-800` | `#264563` | `38, 69, 99` | Aktive Reiter-Texte, Hover dunkler Buttons |
 | ![#2e5275](./farbfelder/blue-700.svg) | `bg-blue-700` | `#2e5275` | `46, 82, 117` | E-Rechnungs-Links (XML/ZUGFeRD) |
 | ![#376189](./farbfelder/blue-600.svg) | `bg-blue-600` | `#376189` | `55, 97, 137` | **Haupt-Aktivfarbe:** Aktive Modul-Tabs (F1–F5), ausgewählte Tabellenzeilen, Primärschalter |
-| ![#4875a3](./farbfelder/blue-500.svg) | `bg-blue-500` | `#4875a3` | `72, 117, 163` | Input Focus-Rings, Drag-and-Drop Hervorhebung |
+| ![#4875a3](./farbfelder/blue-500.svg) | `bg-blue-500` | `#4875a3` | `72, 117, 163` | Input Focus-Rings, aktive Zellen-Hervorhebung |
 | ![#5b8bb8](./farbfelder/blue-400.svg) | `bg-blue-400` | `#5b8bb8` | `91, 139, 184` | Fokus-Rahmen um selektierte Buchungsbalken (`ring-2`) |
 | ![#c4d8ea](./farbfelder/blue-200.svg) | `bg-blue-200` | `#c4d8ea` | `196, 216, 234` | Rahmen um Zähler-Badges |
-| ![#dce8f3](./farbfelder/blue-100.svg) | `bg-blue-100` | `#dce8f3` | `220, 232, 243` | Zähler-Badges ("X Zimmer belegt"), DnD Drop-Zone Hover |
+| ![#dce8f3](./farbfelder/blue-100.svg) | `bg-blue-100` | `#dce8f3` | `220, 232, 243` | Zähler-Badges ("X Zimmer belegt"), Kalender-Zellen Hover |
 | ![#ebf2f8](./farbfelder/blue-50.svg) | `bg-blue-50` | `#ebf2f8` | `235, 242, 248` | Selektierte Vorgangskarten in der Rechnungsliste |
 
 ---

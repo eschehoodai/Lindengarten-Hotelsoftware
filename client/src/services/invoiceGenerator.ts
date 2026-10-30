@@ -119,7 +119,11 @@ export function generateInvoiceFromReservation(
   const room = reservation.room || rooms.find((r) => r.id === reservation.roomId);
 
   const todayStr = new Date().toISOString().split('T')[0];
-  const invoiceNumber = existingInvoice?.invoiceNumber || `RE-${reservation.reservationNumber || reservation.id}`;
+  const invoiceNumber =
+    existingInvoice?.invoiceNumber ||
+    (reservation.reservationNumber?.startsWith('RE-')
+      ? reservation.reservationNumber
+      : `RE-${(reservation.reservationNumber || String(reservation.id)).replace(/^B-/, '')}`);
 
   // Anrede ermitteln
   let recipientSalutation = existingInvoice?.recipientSalutation;
@@ -298,8 +302,18 @@ export function createAdditionalInvoice(
   const room = reservation.room || rooms.find((r) => r.id === reservation.roomId);
   const todayStr = new Date().toISOString().split('T')[0];
   const nextSuffix = existingInvoicesForRes.length + 1;
-  const baseNumber = reservation.reservationNumber || String(reservation.id);
-  const invoiceNumber = `RE-${baseNumber}-${nextSuffix}`;
+  const mainInvoice = existingInvoicesForRes[0];
+  const baseNumber =
+    mainInvoice?.invoiceNumber ||
+    (reservation.reservationNumber?.startsWith('RE-')
+      ? reservation.reservationNumber
+      : `RE-${(reservation.reservationNumber || String(reservation.id)).replace(/^B-/, '')}`);
+  let cleanBase = baseNumber;
+  const subFolioMatch = baseNumber.match(/^(RE-\d{4}-\d+)-\d+$/);
+  if (subFolioMatch) {
+    cleanBase = subFolioMatch[1];
+  }
+  const invoiceNumber = `${cleanBase}-${nextSuffix}`;
 
   // Wenn auf der ersten Rechnung die Firma stand, standardmäßig auf Privatrechnung für den Gast wechseln
   let salutation = 'Sehr geehrter Herr';
@@ -364,10 +378,9 @@ export function createAdditionalInvoice(
 /**
  * Erstellt eine freie Kassenrechnung (ohne Bindung an eine feste Zimmerreservierung).
  */
-export function createFreeInvoice(presetGuest?: Guest | null): Invoice {
+export function createFreeInvoice(presetGuest?: Guest | null, customInvoiceNumber?: string): Invoice {
   const todayStr = new Date().toISOString().split('T')[0];
-  const uniqueNum = Math.floor(1000 + Math.random() * 9000);
-  const invoiceNumber = `RE-KASSE-${new Date().getFullYear()}-${uniqueNum}`;
+  const invoiceNumber = customInvoiceNumber || `KB-${new Date().getFullYear()}-000001`;
 
   const recipientSalutation = presetGuest?.salutation 
     ? `${presetGuest.salutation} ${presetGuest.lastName || ''}`.trim() 

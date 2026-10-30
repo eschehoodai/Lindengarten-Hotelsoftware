@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "seed": "tsx src/db/seed.ts",
+    "production:reset": "tsx src/db/resetProduction.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },

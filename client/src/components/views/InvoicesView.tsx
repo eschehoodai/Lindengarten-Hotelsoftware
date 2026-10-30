@@ -20,6 +20,7 @@ import {
   calculateBreakfastSplit,
   DEFAULT_CLOSING_TEXT 
 } from '../../services/invoiceGenerator';
+import { fetchNextNumber, calculateNextCashReceiptNumber } from '../../services/sequenceClient';
 import { InvoicePdfDocument } from '../pdf/InvoicePdfDocument';
 import { ActionBar } from '../ActionBar';
 import { ConfirmDialog } from '../dialogs/ConfirmDialog';
@@ -509,7 +510,11 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
 
   // Freie Kassenrechnung (ohne Buchungsbezug) anlegen
   const handleCreateFree = async () => {
-    const newFree = createFreeInvoice();
+    let nextNum = await fetchNextNumber('CASH_RECEIPT');
+    if (!nextNum) {
+      nextNum = calculateNextCashReceiptNumber(invoices);
+    }
+    const newFree = createFreeInvoice(null, nextNum);
     await onSaveInvoice(newFree);
     setActiveInvoiceId(newFree.id);
     setSelectedType('freeInvoice');

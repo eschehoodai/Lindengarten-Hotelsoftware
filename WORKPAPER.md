@@ -86,7 +86,7 @@ referenzbilder/
   * `Noch nicht Angereist` vs. `Angereist (Check-In)`.
   * `Noch nicht Abgereist` vs. `Abgereist (Check-Out)`.
   * `Schriftlich reserviert` (verbindlich vs. unverbindliche Option).
-  * `nicht Fest (verlegbar)`: **Kritisches Flag für Drag-and-Drop!** Wenn `Fest`, darf das Zimmer im Kalender nicht versehentlich verschoben werden.
+  * `nicht Fest (verlegbar)`: **Flag für Zimmertreue / Umbuchungsschutz.** Wenn `Fest` (`isLockedToRoom`), wird das Zimmer gegen versehentliche Umbelegung geschützt.
 * **Peripherie- & Schloss-Schnittstellen (Vorlage-Relikt, entfällt laut Vorgabe):**
   * Keine Türschloss-/Keycard-Schnittstelle erforderlich (wurde aus System entfernt).
 
@@ -146,7 +146,7 @@ referenzbilder/
 | :--- | :--- | :--- |
 | **Frontend Framework** | **React 19 + TypeScript (TSX)** | Typsichere Komponentenarchitektur, optimiert für KI-gestützte Entwicklung. |
 | **Styling & Layout** | **Tailwind CSS v4** | Schlanker Utility-First-Ansatz, reines CSS-Grid für Desktop-Frames und Split-Screen. |
-| **Scheduler Drag & Drop** | **@dnd-kit/core** | Schnelle DnD-Engine mit `pointerIntersection` und Kollisionserkennung. |
+| **Scheduler & Matrix** | **CSS Grid & React Modals** | Schnelle 2D-Timeline, kollisionssichere Buchungsmaske & Tastaturnavigation. |
 | **Virtualisierung** | **@tanstack/react-virtual** | Flüssiges Scrolling im Zimmerbelegungsplan bei vielen Zimmern/Monaten. |
 | **Backend & API** | **Node.js (TypeScript) / Vite Fullstack** | Kompakte REST-Endpoints, schnelle Reaktionszeiten. |
 | **Datenbank & ORM** | **SQLite (better-sqlite3 / LibSQL) + Drizzle ORM** | Dateibasierte Datenbank, typsicheres Drizzle-Schema ohne Server-Overhead. |
@@ -337,9 +337,9 @@ export const salutations = sqliteTable('salutations', {
   * Vertikale Y-Achse: Original Lindengarten Zimmer (Nummern 1, 2, 4, 5, Tobias, Annie, Herman, Prinze, Stall, Scheun, Schupp, Heubod, Kammer, Luisa).
   * Horizontale X-Achse: Tage mit **signalrot markierten Samstagen und Sonntagen**.
   * Rezeptions-Datumsindikator (roter Richtungsmarker am aktuellen Tag).
-* **Interaktivität & Drag-and-Drop:**
-  * Ziehen mit `@dnd-kit/core` unter Berücksichtigung von `isLockedToRoom` (wenn ein Gast fest gebucht ist, wird DnD gesperrt!).
-  * Kollisionserkennung über `pointerIntersection` zur strikten Vermeidung von Doppelbelegungen.
+* **Interaktivität & Zimmerzuweisung:**
+  * Präzise Zuweisung und Umbelegung über die Detailmaske (Doppelklick / F9), geschützt durch `isLockedToRoom` gegen versehentliche Umzüge.
+  * Automatische Kollisionserkennung zur strikten Vermeidung von Doppelbelegungen bei Zimmerwechsel.
 * **Statusanzeigen & Housekeeping:**
   * Statusfarben: Orange (Standard), Blau (Gruppe/Sonderbuchung), Grün (Frei/Kontingent), Grau mit Aufdruck `Dirty` (Reinigung ausstehend), Text `Keine Wäsche` (Wäschewechsel entfällt).
   * Status-Buchstabe `r` (Magenta) für reservierte, noch nicht erschienene Gäste.
@@ -428,10 +428,10 @@ graph TD
      - Vertikale Y-Achse: Alle 14 Original Lindengarten Zimmer (1, 2, 4, 5, Tobias, Annie, Herman, Prinze, Stall, Scheun, Schupp, Heubod, Kammer, Luisa).
      - Horizontale X-Achse: Tage mit **signalrot markierten Samstagen und Sonntagen** (`Sa`/`So`) nach Bild 01 der ELAN hogatec Software.
      - Buchungsbalken mit Gastname, Nächteanzahl, Buchungsstatus (`[r]` Magenta für Reserviert, Haken für Im Haus) und Sperr-Icon 🔒.
-   - [x] **Drag-and-Drop mit `@dnd-kit/core` & Kollisionserkennung**:
-     - Buchungen können per DnD auf andere Zimmer verschoben werden.
-     - **Buchungsschutz (`isLockedToRoom`)**: Wenn eine Buchung als fest gebucht markiert ist, wird DnD gesperrt (`disabled`).
-     - **Kollisionserkennung**: Striktes Verhindern von Doppelbelegungen auf demselben Zimmer im selben Zeitraum mit Warnmeldung.
+   - [x] **Zimmerverwaltung & Kollisionserkennung**:
+     - Buchungen können per Detailmaske (Doppelklick / F9) auf andere freie Zimmer umgebucht werden.
+     - **Buchungsschutz (`isLockedToRoom`)**: Feste Buchungen sind gegen versehentliches Umbelegen geschützt.
+     - **Kollisionserkennung**: Striktes Verhindern von Doppelbelegungen auf demselben Zimmer im selben Zeitraum mit Blockade & Warnmeldung.
    - [x] **Schnellinfo-Bar am unteren Rand**:
      - Live-Statusanzeige: `Reser Reservierung auf: [Nr] [Gastname] ([Nächte]Ü/[Personen]P. (GPr.: [Betrag] €) / Z:[Zimmer])`.
    - [x] **Ansichts-Umschalter**:
@@ -469,7 +469,7 @@ Statt einer hochkomplexen Enterprise-Schnittstelle mit Übertragung von Preisras
   * Findet das Backend ein passendes, durchgehend freies Zimmer der Kategorie, wird es automatisch zugewiesen.
   * Findet es keines, wird die Buchung mit `roomId = null` angelegt.
   * In `TimelineScheduler.tsx` existiert eine feste oberste Zeile: **„⚠️ Nicht zugewiesen / Zuweisung prüfen“**.
-  * Die Rezeptionistin sieht unzugeordnete Buchungen sofort und kann bestehende Buchungen per Drag-and-Drop verschieben, um die Lücke freizuschaufeln.
+  * Die Rezeptionistin sieht unzugeordnete Buchungen sofort und kann freie Zimmer über die Detailmaske (Doppelklick / F9) direkt zuweisen oder Umbuchungen vornehmen.
 
 ### 9.4 Buchungs-Lebenszyklus (New, Modify, Cancel)
 * **Neu (`NEW`):** Gast & Buchung anlegen, Zimmer zuweisen oder in Unassigned-Zeile ablegen, Quittierung an DIRS21.
@@ -519,7 +519,7 @@ Hotel Lindengarten
 * **Sobald DIRS21 rückmeldet, welches Format (REST oder OTA-XML) freigeschaltet wird, bauen wir als Erstes:**
   1. **Unzugewiesene Zeile im Kalender (`TimelineScheduler.tsx`):**
      - Integration einer festen Posteingangszeile ganz oben: `⚠️ Nicht zugewiesen / Zuweisung prüfen`.
-     - Unterstützung für Reservierungen mit `roomId = null` im 2D-Scheduler inklusive Drag-and-Drop zur manuellen Zuordnung auf ein freies Zimmer.
+     - Unterstützung für Reservierungen mit `roomId = null` im 2D-Scheduler inklusive manueller Zuweisung auf ein freies Zimmer via Detailmaske.
   2. **Abfrage-Worker im Express-Backend (`server/src/index.ts`):**
      - Einrichtung des 2-Minuten-Polling-Intervalls (`setInterval`).
      - Format-Parser (JSON oder XML) für eingehende Reservierungen.

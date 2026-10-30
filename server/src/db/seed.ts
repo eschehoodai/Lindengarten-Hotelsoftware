@@ -58,7 +58,7 @@ async function initTables() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       reservation_number TEXT NOT NULL UNIQUE,
       guest_id INTEGER NOT NULL REFERENCES guests(id),
-      room_id INTEGER NOT NULL REFERENCES rooms(id),
+      room_id INTEGER REFERENCES rooms(id),
       arrival_date TEXT NOT NULL,
       departure_date TEXT NOT NULL,
       nights INTEGER NOT NULL,
@@ -165,6 +165,24 @@ async function initTables() {
   try {
     await client.execute(`ALTER TABLE reservations ADD COLUMN notes TEXT;`);
   } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN status TEXT DEFAULT 'confirmed';`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN external_reservation_id TEXT;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN channel_source TEXT;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN ota_confirmation_code TEXT;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN last_synced_at TEXT;`);
+  } catch {}
+  try {
+    await client.execute(`ALTER TABLE reservations ADD COLUMN category_code TEXT;`);
+  } catch {}
 
   await client.execute(`
     CREATE TABLE IF NOT EXISTS salutations (
@@ -173,6 +191,65 @@ async function initTables() {
       address_text TEXT,
       letter_greeting TEXT NOT NULL,
       code TEXT
+    );
+  `);
+
+  // DIRS21 Channel Manager Tabellen
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS channel_room_mappings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel TEXT NOT NULL DEFAULT 'dirs21',
+      category_code TEXT NOT NULL UNIQUE,
+      category_name TEXT NOT NULL,
+      channel_room_id TEXT NOT NULL,
+      channel_room_name TEXT NOT NULL,
+      is_active INTEGER DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
+  `);
+
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS channel_sync_queue (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel TEXT NOT NULL DEFAULT 'dirs21',
+      category_code TEXT NOT NULL,
+      date_from TEXT NOT NULL,
+      date_to TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      retry_count INTEGER DEFAULT 0,
+      next_retry_at TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL,
+      processed_at TEXT
+    );
+  `);
+
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS channel_sync_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      channel TEXT NOT NULL DEFAULT 'dirs21',
+      direction TEXT NOT NULL,
+      action TEXT NOT NULL,
+      endpoint_url TEXT NOT NULL,
+      request_payload TEXT NOT NULL,
+      response_payload TEXT,
+      response_status INTEGER,
+      duration_ms INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      error_message TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+
+  await client.execute(`
+    CREATE TABLE IF NOT EXISTS number_sequences (
+      code TEXT PRIMARY KEY,
+      current_value INTEGER NOT NULL DEFAULT 0,
+      prefix TEXT NOT NULL DEFAULT '',
+      pad_length INTEGER NOT NULL DEFAULT 6,
+      has_year_prefix INTEGER DEFAULT 0,
+      current_year INTEGER,
+      updated_at TEXT NOT NULL
     );
   `);
 }
@@ -261,55 +338,55 @@ async function seedData() {
   await client.execute(`DELETE FROM reservations;`);
   await client.execute(`DELETE FROM guests;`);
 
-  // 10 Gäste mit Fantasie-Daten anlegen
+  // 10 Gäste mit sauberem Nummernkreis (G-000001 bis G-000010) anlegen
   const guestsToInsert = [
     {
-      guestNumber: '178847', searchName: 'David', titleCode: 1, salutation: 'Sehr geehrter Herr',
+      guestNumber: 'G-000001', searchName: 'David', titleCode: 1, salutation: 'Sehr geehrter Herr',
       lastName: 'David', firstName: 'Klaus', name2: '', street: 'Marktplatz 4', zipCode: '96264',
       city: 'Altenkunstadt', country: 'Deutschland', phone: '09572-12345', email: 'klaus.david@example.de', isRegularGuest: 1
     },
     {
-      guestNumber: '18506', searchName: 'Junghans', titleCode: 3, salutation: 'Sehr geehrte Familie',
+      guestNumber: 'G-000002', searchName: 'Junghans', titleCode: 3, salutation: 'Sehr geehrte Familie',
       lastName: 'Junghans', firstName: 'Torsten', name2: '', street: 'Lindenallee 12', zipCode: '04109',
       city: 'Leipzig', country: 'Deutschland', phone: '0341-987654', email: 'junghans.familie@example.de', isRegularGuest: 0
     },
     {
-      guestNumber: '117799', searchName: 'Hanse Touristik', titleCode: 4, salutation: 'Sehr geehrte Damen und Herren',
+      guestNumber: 'G-000003', searchName: 'Hanse Touristik', titleCode: 4, salutation: 'Sehr geehrte Damen und Herren',
       lastName: 'Langerwisch', firstName: 'Marion', name2: 'Hanse Touristik Hamburg GmbH', street: 'Hafenstraße 100', zipCode: '20457',
       city: 'Hamburg', country: 'Deutschland', phone: '040-5551234', email: 'info@hanse-touristik.de', isRegularGuest: 1
     },
     {
-      guestNumber: '18531', searchName: 'Bergmann', titleCode: 7, salutation: 'Sehr geehrte Frau Dr.',
+      guestNumber: 'G-000004', searchName: 'Bergmann', titleCode: 7, salutation: 'Sehr geehrte Frau Dr.',
       lastName: 'Bergmann', firstName: 'Stefanie', name2: '', street: 'Rosenweg 14', zipCode: '01067',
       city: 'Dresden', country: 'Deutschland', phone: '0351-4458912', email: 'stefanie.bergmann@sachsen-med.de', isRegularGuest: 1
     },
     {
-      guestNumber: '18532', searchName: 'Buchenau', titleCode: 1, salutation: 'Sehr geehrter Herr',
+      guestNumber: 'G-000005', searchName: 'Buchenau', titleCode: 1, salutation: 'Sehr geehrter Herr',
       lastName: 'von Buchenau', firstName: 'Maximilian', name2: '', street: 'Schlossallee 7', zipCode: '99084',
       city: 'Erfurt', country: 'Deutschland', phone: '0361-7892341', email: 'm.buchenau@buchenau-forst.de', isRegularGuest: 0
     },
     {
-      guestNumber: '18533', searchName: 'Klein', titleCode: 3, salutation: 'Sehr geehrte Familie',
+      guestNumber: 'G-000006', searchName: 'Klein', titleCode: 3, salutation: 'Sehr geehrte Familie',
       lastName: 'Klein', firstName: 'Sarah', name2: '', street: 'Birkenhain 22', zipCode: '10437',
       city: 'Berlin', country: 'Deutschland', phone: '030-89127634', email: 'familie.klein.berlin@web-mail.de', isRegularGuest: 0
     },
     {
-      guestNumber: '18534', searchName: 'Weber', titleCode: 8, salutation: 'Sehr geehrter Herr Prof.',
+      guestNumber: 'G-000007', searchName: 'Weber', titleCode: 8, salutation: 'Sehr geehrter Herr Prof.',
       lastName: 'Weber', firstName: 'Heinrich', name2: '', street: 'Universitätsstraße 18', zipCode: '04109',
       city: 'Leipzig', country: 'Deutschland', phone: '0341-3322110', email: 'h.weber@uni-leipzig-forschung.de', isRegularGuest: 1
     },
     {
-      guestNumber: '18535', searchName: 'Sonnenschein', titleCode: 2, salutation: 'Sehr geehrte Frau',
+      guestNumber: 'G-000008', searchName: 'Sonnenschein', titleCode: 2, salutation: 'Sehr geehrte Frau',
       lastName: 'Sonnenschein', firstName: 'Claudia', name2: '', street: 'Am Kurpark 5', zipCode: '02797',
       city: 'Kurort Oybin', country: 'Deutschland', phone: '035844-71239', email: 'c.sonnenschein@oybin-tour.de', isRegularGuest: 0
     },
     {
-      guestNumber: '18536', searchName: 'Wunderlich', titleCode: 1, salutation: 'Sehr geehrter Herr',
+      guestNumber: 'G-000009', searchName: 'Wunderlich', titleCode: 1, salutation: 'Sehr geehrter Herr',
       lastName: 'Wunderlich', firstName: 'Felix', name2: '', street: 'Bergstraße 88', zipCode: '02763',
       city: 'Zittau', country: 'Deutschland', phone: '03583-667788', email: 'f.wunderlich@oberlausitz-design.de', isRegularGuest: 0
     },
     {
-      guestNumber: '18537', searchName: 'Meister', titleCode: 3, salutation: 'Sehr geehrte Familie',
+      guestNumber: 'G-000010', searchName: 'Meister', titleCode: 3, salutation: 'Sehr geehrte Familie',
       lastName: 'Meister', firstName: 'Sabine', name2: '', street: 'Sonnenhang 3', zipCode: '09112',
       city: 'Chemnitz', country: 'Deutschland', phone: '0371-5544332', email: 'meister.familie@sachsen-mail.de', isRegularGuest: 1
     }
@@ -333,10 +410,10 @@ async function seedData() {
     roomMap.set(String(row.room_code), Number(row.id));
   }
 
-  // 5. Buchungen anlegen (10 neue Buchungen, 4-7 Tage, alle im Oktober 2026)
+  // 5. Buchungen mit sauberem Nummernkreis (B-2026-000001 bis B-2026-000010) anlegen
   const reservationsToInsert = [
     {
-      reservationNumber: '19101', guestId: guestIds[3], roomId: roomMap.get('Annie')!,
+      reservationNumber: 'B-2026-000001', guestId: guestIds[3], roomId: roomMap.get('Annie')!,
       arrivalDate: '2026-10-02', departureDate: '2026-10-06', nights: 4, adultsCount: 2, childrenCount: 0,
       companionNames: 'Dr. Thomas Bergmann', priceVariant: 'Doppelt belegt', pricePerNight: 95.0, totalPrice: 380.0,
       isArrived: 1, isDeparted: 1, isWrittenReservation: 1, isLockedToRoom: 0,
@@ -344,7 +421,7 @@ async function seedData() {
       billingDebitor: 'Bergmann', notes: 'Wanderurlaub im Zittauer Gebirge. Frühere Abreise am Vormittag erfolgt.'
     },
     {
-      reservationNumber: '19102', guestId: guestIds[0], roomId: roomMap.get('Kammer')!,
+      reservationNumber: 'B-2026-000002', guestId: guestIds[0], roomId: roomMap.get('Kammer')!,
       arrivalDate: '2026-10-04', departureDate: '2026-10-09', nights: 5, adultsCount: 1, childrenCount: 0,
       companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 65.0, totalPrice: 325.0,
       isArrived: 1, isDeparted: 1, isWrittenReservation: 1, isLockedToRoom: 1,
@@ -352,7 +429,7 @@ async function seedData() {
       billingDebitor: 'David', notes: 'Geschäftsreise Handwerkskammer. Frühes Frühstück ab 06:45 Uhr.'
     },
     {
-      reservationNumber: '19103', guestId: guestIds[2], roomId: roomMap.get('Heubod')!,
+      reservationNumber: 'B-2026-000003', guestId: guestIds[2], roomId: roomMap.get('Heubod')!,
       arrivalDate: '2026-10-05', departureDate: '2026-10-12', nights: 7, adultsCount: 2, childrenCount: 0,
       companionNames: 'Jan Langerwisch', priceVariant: 'Doppelt belegt', pricePerNight: 135.0, totalPrice: 945.0,
       isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
@@ -361,7 +438,7 @@ async function seedData() {
       notes: 'Kostenübernahme Übernachtung & Halbpension durch Hanse Touristik Hamburg GmbH vorliegend.'
     },
     {
-      reservationNumber: '19104', guestId: guestIds[1], roomId: roomMap.get('Scheun')!,
+      reservationNumber: 'B-2026-000004', guestId: guestIds[1], roomId: roomMap.get('Scheun')!,
       arrivalDate: '2026-10-08', departureDate: '2026-10-15', nights: 7, adultsCount: 2, childrenCount: 2,
       companionNames: 'Aline, Max und Lea Junghans', priceVariant: 'Dreifach belegt', pricePerNight: 170.0, totalPrice: 1190.0,
       isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
@@ -370,7 +447,7 @@ async function seedData() {
       notes: 'Herbsturlaub mit der Familie. Beistellbett für Tochter Lea im Zimmer aufgebaut.'
     },
     {
-      reservationNumber: '19105', guestId: guestIds[7], roomId: roomMap.get('5')!,
+      reservationNumber: 'B-2026-000005', guestId: guestIds[7], roomId: roomMap.get('5')!,
       arrivalDate: '2026-10-10', departureDate: '2026-10-14', nights: 4, adultsCount: 2, childrenCount: 0,
       companionNames: 'Bernd Sonnenschein', priceVariant: 'Doppelt belegt', pricePerNight: 90.0, totalPrice: 360.0,
       isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
@@ -378,7 +455,7 @@ async function seedData() {
       billingDebitor: 'Sonnenschein', notes: 'Hochzeitstag am 12.10. Flasche Lindengarten-Sekt mit Grußkarte auf dem Zimmer vorbereitet.'
     },
     {
-      reservationNumber: '19106', guestId: guestIds[4], roomId: roomMap.get('Tobias')!,
+      reservationNumber: 'B-2026-000006', guestId: guestIds[4], roomId: roomMap.get('Tobias')!,
       arrivalDate: '2026-10-12', departureDate: '2026-10-17', nights: 5, adultsCount: 1, childrenCount: 0,
       companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 95.0, totalPrice: 475.0,
       isArrived: 1, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
@@ -386,7 +463,7 @@ async function seedData() {
       billingDebitor: 'von Buchenau', notes: 'Spätanreise ca. 20:30 Uhr angekündigt. Benötigt Stellplatz mit E-Ladesäule am Nebengebäude.'
     },
     {
-      reservationNumber: '19107', guestId: guestIds[8], roomId: roomMap.get('Schupp')!,
+      reservationNumber: 'B-2026-000007', guestId: guestIds[8], roomId: roomMap.get('Schupp')!,
       arrivalDate: '2026-10-15', departureDate: '2026-10-21', nights: 6, adultsCount: 1, childrenCount: 0,
       companionNames: '', priceVariant: 'Einfach belegt', pricePerNight: 85.0, totalPrice: 510.0,
       isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
@@ -394,7 +471,7 @@ async function seedData() {
       billingDebitor: 'Wunderlich', notes: 'Reist mit mittelgroßem Hund (Golden Retriever). Futternapf und Hundedecke aufs Zimmer.'
     },
     {
-      reservationNumber: '19108', guestId: guestIds[6], roomId: roomMap.get('Prinze')!,
+      reservationNumber: 'B-2026-000008', guestId: guestIds[6], roomId: roomMap.get('Prinze')!,
       arrivalDate: '2026-10-17', departureDate: '2026-10-24', nights: 7, adultsCount: 2, childrenCount: 0,
       companionNames: 'Dr. Gisela Weber', priceVariant: 'Doppelt belegt', pricePerNight: 130.0, totalPrice: 910.0,
       isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
@@ -403,7 +480,7 @@ async function seedData() {
       notes: 'Stammgäste. Bevorzugen Tisch 4 im Wintergarten. Glutenfreie Kost für Frau Dr. Weber.'
     },
     {
-      reservationNumber: '19109', guestId: guestIds[5], roomId: roomMap.get('Stall')!,
+      reservationNumber: 'B-2026-000009', guestId: guestIds[5], roomId: roomMap.get('Stall')!,
       arrivalDate: '2026-10-20', departureDate: '2026-10-26', nights: 6, adultsCount: 2, childrenCount: 1,
       companionNames: 'Michael und Tim Klein', priceVariant: 'Dreifach belegt', pricePerNight: 145.0, totalPrice: 870.0,
       isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 0,
@@ -411,7 +488,7 @@ async function seedData() {
       billingDebitor: 'Klein', notes: 'Kinderreisebett und Hochstuhl im Zimmer vorbereiten. Allergiker-Bettwäsche.'
     },
     {
-      reservationNumber: '19110', guestId: guestIds[9], roomId: roomMap.get('Luisa')!,
+      reservationNumber: 'B-2026-000010', guestId: guestIds[9], roomId: roomMap.get('Luisa')!,
       arrivalDate: '2026-10-22', departureDate: '2026-10-29', nights: 7, adultsCount: 2, childrenCount: 1,
       companionNames: 'Sabine, Jörg und Felix Meister', priceVariant: 'Dreifach belegt', pricePerNight: 155.0, totalPrice: 1085.0,
       isArrived: 0, isDeparted: 0, isWrittenReservation: 1, isLockedToRoom: 1,
@@ -448,7 +525,7 @@ async function seedData() {
   // Rechnung 1: Dr. Stefanie Bergmann (Bezahlt)
   const inv1 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117810', ?, ?, '2026-10-06', '2026-10-02', '2026-10-06', 355.14, 24.86, 16.81, 3.19, 0.00, 400.00, 'EC-Karte', 1, datetime('now'))
+          VALUES ('RE-2026-000001', ?, ?, '2026-10-06', '2026-10-02', '2026-10-06', 355.14, 24.86, 16.81, 3.19, 0.00, 400.00, 'EC-Karte', 1, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[0], guestIds[3]]
   });
@@ -469,7 +546,7 @@ async function seedData() {
   // Rechnung 2: Klaus David (Bezahlt)
   const inv2 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117811', ?, ?, '2026-10-09', '2026-10-04', '2026-10-09', 303.74, 21.26, 0.00, 0.00, 0.00, 325.00, 'BAR', 1, datetime('now'))
+          VALUES ('RE-2026-000002', ?, ?, '2026-10-09', '2026-10-04', '2026-10-09', 303.74, 21.26, 0.00, 0.00, 0.00, 325.00, 'BAR', 1, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[1], guestIds[0]]
   });
@@ -484,7 +561,7 @@ async function seedData() {
   // Rechnung 3: Hanse Touristik (Offen)
   const inv3 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('117812', ?, ?, '2026-10-12', '2026-10-05', '2026-10-12', 883.18, 61.82, 147.06, 27.94, 0.00, 1120.00, 'RECHNUNG', 0, datetime('now'))
+          VALUES ('RE-2026-000003', ?, ?, '2026-10-12', '2026-10-05', '2026-10-12', 883.18, 61.82, 147.06, 27.94, 0.00, 1120.00, 'RECHNUNG', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[2], guestIds[2]]
   });
@@ -505,7 +582,7 @@ async function seedData() {
   // Rechnung 4: Torsten Junghans (Offen)
   const inv4 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19104', ?, ?, '2026-10-15', '2026-10-08', '2026-10-15', 986.54, 69.06, 548.23, 104.17, 0.00, 1708.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000004', ?, ?, '2026-10-15', '2026-10-08', '2026-10-15', 986.54, 69.06, 548.23, 104.17, 0.00, 1708.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[3], guestIds[1]]
   });
@@ -529,7 +606,7 @@ async function seedData() {
   // Rechnung 5: Claudia Sonnenschein (Offen)
   const inv5 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19105', ?, ?, '2026-10-14', '2026-10-10', '2026-10-14', 300.56, 21.04, 32.27, 6.13, 0.00, 360.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000005', ?, ?, '2026-10-14', '2026-10-10', '2026-10-14', 300.56, 21.04, 32.27, 6.13, 0.00, 360.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[4], guestIds[7]]
   });
@@ -548,7 +625,7 @@ async function seedData() {
   // Rechnung 6: Maximilian von Buchenau (Offen)
   const inv6 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19106', ?, ?, '2026-10-17', '2026-10-12', '2026-10-17', 421.50, 29.50, 20.17, 3.83, 0.00, 475.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000006', ?, ?, '2026-10-17', '2026-10-12', '2026-10-17', 421.50, 29.50, 20.17, 3.83, 0.00, 475.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[5], guestIds[4]]
   });
@@ -567,7 +644,7 @@ async function seedData() {
   // Rechnung 7: Felix Wunderlich (Offen)
   const inv7 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19107', ?, ?, '2026-10-21', '2026-10-15', '2026-10-21', 449.72, 31.48, 24.20, 4.60, 0.00, 510.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000007', ?, ?, '2026-10-21', '2026-10-15', '2026-10-21', 449.72, 31.48, 24.20, 4.60, 0.00, 510.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[6], guestIds[8]]
   });
@@ -586,7 +663,7 @@ async function seedData() {
   // Rechnung 8: Heinrich Weber (Offen)
   const inv8 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19108', ?, ?, '2026-10-24', '2026-10-17', '2026-10-24', 787.66, 55.14, 56.47, 10.73, 0.00, 910.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000008', ?, ?, '2026-10-24', '2026-10-17', '2026-10-24', 787.66, 55.14, 56.47, 10.73, 0.00, 910.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[7], guestIds[6]]
   });
@@ -605,7 +682,7 @@ async function seedData() {
   // Rechnung 9: Sarah Klein (Offen)
   const inv9 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19109', ?, ?, '2026-10-26', '2026-10-20', '2026-10-26', 732.34, 51.26, 72.61, 13.79, 0.00, 870.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000009', ?, ?, '2026-10-26', '2026-10-20', '2026-10-26', 732.34, 51.26, 72.61, 13.79, 0.00, 870.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[8], guestIds[5]]
   });
@@ -624,7 +701,7 @@ async function seedData() {
   // Rechnung 10: Sabine Meister (Offen)
   const inv10 = await client.execute({
     sql: `INSERT INTO invoices (invoice_number, reservation_id, guest_id, invoice_date, service_period_start, service_period_end, net_lodging, tax_lodging, net_service, tax_service, city_tax_amount, total_gross, payment_method, is_paid, created_at)
-          VALUES ('RE-19110', ?, ?, '2026-10-29', '2026-10-22', '2026-10-29', 919.81, 64.39, 84.71, 16.09, 0.00, 1085.00, 'BAR', 0, datetime('now'))
+          VALUES ('RE-2026-000010', ?, ?, '2026-10-29', '2026-10-22', '2026-10-29', 919.81, 64.39, 84.71, 16.09, 0.00, 1085.00, 'BAR', 0, datetime('now'))
           RETURNING id;`,
     args: [reservationIds[9], guestIds[9]]
   });
@@ -640,6 +717,38 @@ async function seedData() {
     args: [inv10Id]
   });
 
+  // 6. DIRS21 Channel Mappings (2-Wege Light für die 4 Lindengarten-Kategorien)
+  const defaultMappings = [
+    { catCode: 'EZ', catName: 'Einzelzimmer', channelId: '101', channelName: 'Einzelzimmer Standard' },
+    { catCode: 'DZ', catName: 'Doppelzimmer', channelId: '102', channelName: 'Doppelzimmer Standard' },
+    { catCode: 'TBZ', catName: 'Dreibettzimmer', channelId: '103', channelName: 'Dreibettzimmer Komfort' },
+    { catCode: 'SUITE', catName: 'Suite 120', channelId: '104', channelName: 'Suite 120' },
+  ];
+
+  for (const m of defaultMappings) {
+    const existing = await client.execute({
+      sql: `SELECT id FROM channel_room_mappings WHERE category_code = ?`,
+      args: [m.catCode]
+    });
+    if (!existing.rows || existing.rows.length === 0) {
+      await client.execute({
+        sql: `INSERT INTO channel_room_mappings (channel, category_code, category_name, channel_room_id, channel_room_name, is_active, updated_at)
+              VALUES ('dirs21', ?, ?, ?, ?, 1, ?)`,
+        args: [m.catCode, m.catName, m.channelId, m.channelName, new Date().toISOString()]
+      });
+    }
+  }
+
+  // 7. Nummernkreise initialisieren
+  await client.execute(`DELETE FROM number_sequences;`);
+  await client.execute({
+    sql: `INSERT INTO number_sequences (code, current_value, prefix, pad_length, has_year_prefix, current_year, updated_at) VALUES
+      ('GUEST', 10, 'G-', 6, 0, 2026, datetime('now')),
+      ('RESERVATION', 10, 'B-', 6, 1, 2026, datetime('now')),
+      ('INVOICE', 10, 'RE-', 6, 1, 2026, datetime('now')),
+      ('CASH_RECEIPT', 0, 'KB-', 6, 1, 2026, datetime('now'));`
+  });
+  console.log('✅ Nummernkreise initialisiert (Gäste ab G-000011, Buchungen ab B-2026-000011, Rechnungen ab RE-2026-000011).');
   console.log('✅ Seeding erfolgreich abgeschlossen! 10 Gäste und 10 Reservierungen (4-7 Tage, Oktober 2026) wurden angelegt.');
 }
 

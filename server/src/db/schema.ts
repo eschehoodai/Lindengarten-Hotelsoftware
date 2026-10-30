@@ -54,10 +54,18 @@ export const reservations = sqliteTable('reservations', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   reservationNumber: text('reservation_number').notNull().unique(), // z. B. "18506"
   guestId: integer('guest_id').notNull().references(() => guests.id),
-  roomId: integer('room_id').notNull().references(() => rooms.id),
+  roomId: integer('room_id').references(() => rooms.id), // Nullable für Zimmer-Tetris / unzugewiesene Buchungen
   arrivalDate: text('arrival_date').notNull(),     // YYYY-MM-DD
   departureDate: text('departure_date').notNull(), // YYYY-MM-DD
   nights: integer('nights').notNull(),
+  
+  // Status & Channelmanager
+  status: text('status').default('confirmed'), // 'confirmed' | 'cancelled' | 'unassigned'
+  categoryCode: text('category_code'), // z. B. 'EZ', 'DZ', 'TBZ', 'SUITE' (insb. für unzugewiesene Buchungen)
+  externalReservationId: text('external_reservation_id').unique(), // DIRS21 Buchungsnummer
+  channelSource: text('channel_source'), // z. B. 'DIRS21 / Booking.com', 'DIRS21 / Expedia', 'Direkt'
+  otaConfirmationCode: text('ota_confirmation_code'), // Endkunden-Buchungsnummer
+  lastSyncedAt: text('last_synced_at'),
   
   // Personen & Mitreisende
   adultsCount: integer('adults_count').default(1),
@@ -211,3 +219,58 @@ export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
     references: [invoices.id],
   }),
 }));
+
+// ==========================================
+// DIRS21 CHANNEL MANAGER (2-WEGE LIGHT)
+// ==========================================
+
+export const channelRoomMappings = sqliteTable('channel_room_mappings', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  channel: text('channel').notNull().default('dirs21'),
+  categoryCode: text('category_code').notNull().unique(), // 'EZ', 'DZ', 'TBZ', 'SUITE'
+  categoryName: text('category_name').notNull(),
+  channelRoomId: text('channel_room_id').notNull(),       // z. B. '101', '102', '103', '104'
+  channelRoomName: text('channel_room_name').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).default(true),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const channelSyncQueue = sqliteTable('channel_sync_queue', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  channel: text('channel').notNull().default('dirs21'),
+  categoryCode: text('category_code').notNull(),
+  dateFrom: text('date_from').notNull(), // YYYY-MM-DD
+  dateTo: text('date_to').notNull(),     // YYYY-MM-DD
+  status: text('status').notNull().default('pending'), // 'pending' | 'processing' | 'completed' | 'failed'
+  retryCount: integer('retry_count').default(0),
+  nextRetryAt: text('next_retry_at'),
+  errorMessage: text('error_message'),
+  createdAt: text('created_at').notNull(),
+  processedAt: text('processed_at'),
+});
+
+export const channelSyncLogs = sqliteTable('channel_sync_logs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  channel: text('channel').notNull().default('dirs21'),
+  direction: text('direction').notNull(), // 'INBOUND' | 'OUTBOUND'
+  action: text('action').notNull(),       // 'AVAILABILITY_PUSH' | 'BOOKING_FETCH' | 'BOOKING_ACK' | 'CONNECTION_TEST'
+  endpointUrl: text('endpoint_url').notNull(),
+  requestPayload: text('request_payload').notNull(),
+  responsePayload: text('response_payload'),
+  responseStatus: integer('response_status'),
+  durationMs: integer('duration_ms').notNull(),
+  status: text('status').notNull(),       // 'SUCCESS' | 'ERROR'
+  errorMessage: text('error_message'),
+  createdAt: text('created_at').notNull(),
+});
+
+// 11. Nummernkreise / Sequenzen (GoBD- und Übergabe-Sicherheit)
+export const numberSequences = sqliteTable('number_sequences', {
+  code: text('code').primaryKey(), // 'GUEST', 'RESERVATION', 'INVOICE', 'CASH_RECEIPT'
+  currentValue: integer('current_value').notNull().default(0),
+  prefix: text('prefix').notNull().default(''), // z. B. 'G-', 'B-', 'RE-', 'KB-'
+  padLength: integer('pad_length').notNull().default(6), // Standard: 6-stellig ('000001')
+  hasYearPrefix: integer('has_year_prefix', { mode: 'boolean' }).default(false), // true -> 'B-2026-000001'
+  currentYear: integer('current_year'), // z. B. 2026
+  updatedAt: text('updated_at').notNull(),
+});

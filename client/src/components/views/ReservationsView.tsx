@@ -6,9 +6,10 @@ import { ReservationDialog } from '../dialogs/ReservationDialog';
 import { StatusDialog } from '../dialogs/StatusDialog';
 import { ConfirmDialog } from '../dialogs/ConfirmDialog';
 import { MeldescheinPdfDocument } from '../pdf/MeldescheinPdfDocument';
+import { fetchPreviewNumber, calculateNextReservationNumber } from '../../services/sequenceClient';
 import { 
   Calendar, DoorClosed, Users, Clock, Lock, Unlock, 
-  CheckCircle2, Search, Filter, Key, Coffee, FileText, AlertCircle, Utensils 
+  CheckCircle2, Search, Filter, Key, Coffee, FileText, AlertCircle, Utensils, AlertTriangle 
 } from 'lucide-react';
 
 interface ReservationsViewProps {
@@ -160,9 +161,12 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
     setIsEditOpen(true);
   };
 
-  const handleOpenCopy = () => {
+  const handleOpenCopy = async () => {
     if (!selectedRes) return;
-    const nextResNumber = `18${Math.floor(100 + Math.random() * 900)}`;
+    let nextResNumber = await fetchPreviewNumber('RESERVATION');
+    if (!nextResNumber) {
+      nextResNumber = calculateNextReservationNumber(reservations);
+    }
     setEditingReservation({
       ...selectedRes,
       id: undefined,
@@ -291,9 +295,10 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
             ) : (
               filteredReservations.map((res) => {
                 const isSelected = selectedId === res.id;
-                const isArrived = res.isArrived && !res.isDeparted;
-                const isDeparted = res.isDeparted;
-                const isReservedOnly = !res.isArrived && !res.isDeparted;
+                const isUnassigned = !res.roomId || res.roomId === 0;
+                const isArrived = !isUnassigned && res.isArrived && !res.isDeparted;
+                const isDeparted = !isUnassigned && res.isDeparted;
+                const isReservedOnly = !isUnassigned && !res.isArrived && !res.isDeparted;
 
                 return (
                   <tr
@@ -308,7 +313,16 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
                   >
                     <td className="py-1 px-3 border-r border-slate-200/50 font-bold">{res.reservationNumber}</td>
                     <td className="py-1 px-3 border-r border-slate-200/50 font-sans font-bold">
-                      [{res.room_code || res.room?.roomCode}] {res.room_name || res.room?.name}
+                      {isUnassigned ? (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-bold ${
+                          isSelected ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}>
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span>⚠️ Unzugewiesen ({res.categoryCode || 'Online'})</span>
+                        </span>
+                      ) : (
+                        `[${res.room_code || res.room?.roomCode}] ${res.room_name || res.room?.name}`
+                      )}
                     </td>
                     <td className="py-1 px-3 border-r border-slate-200/50 font-sans">
                       <span className="font-semibold">{res.guest?.lastName || res.last_name}, {res.guest?.firstName || res.first_name}</span>
@@ -374,6 +388,14 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
                           Abgereist
                         </span>
                       )}
+                      {isUnassigned && (
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
+                          isSelected ? 'bg-amber-400 text-slate-900' : 'bg-amber-100 text-amber-900 border border-amber-300'
+                        }`}>
+                          <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />
+                          <span>Unzugewiesen</span>
+                        </span>
+                      )}
                       {isReservedOnly && (
                         <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[10px] font-bold ${
                           isSelected ? 'bg-white/20 text-white' : 'bg-[#fcf3e6] text-[#8c5820]'
@@ -413,7 +435,11 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
               <Calendar className="w-4 h-4 text-[#376189]" />
               <span>Buchungsdetail & Verpflegung (ELAN hogatec):</span>
               <strong className="text-[#376189]">
-                {selectedRes ? `Res-Nr. ${selectedRes.reservationNumber || '—'} [${selectedRes.room_code || selectedRoom?.roomCode || ''} ${selectedRes.room_name || selectedRoom?.name || ''}]` : 'Keine Buchung'}
+                {selectedRes ? (
+                  selectedRes.roomId === null || selectedRes.roomId === 0 || selectedRes.status === 'unassigned'
+                    ? `Res-Nr. ${selectedRes.reservationNumber || '—'} [⚠️ Noch unzugewiesen (${selectedRes.categoryCode || 'Online'})]`
+                    : `Res-Nr. ${selectedRes.reservationNumber || '—'} [${selectedRes.room_code || selectedRoom?.roomCode || ''} ${selectedRes.room_name || selectedRoom?.name || ''}]`
+                ) : 'Keine Buchung'}
               </strong>
             </span>
           </div>
@@ -470,7 +496,14 @@ export const ReservationsView: React.FC<ReservationsViewProps> = ({
               <div>
                 <span className="text-xs font-bold text-slate-700 uppercase tracking-wide">AUFENTHALT & ZIMMER</span>
                 <div className="font-bold text-[#243c54] text-xs md:text-[13px] mt-0.5">
-                  Zimmer {selectedRes.room_code || selectedRoom?.roomCode}: {selectedRes.room_name || selectedRoom?.name}
+                  {selectedRes.roomId === null || selectedRes.roomId === 0 || selectedRes.status === 'unassigned' ? (
+                    <span className="text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-300 inline-flex items-center gap-1 text-xs">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      Noch kein Zimmer zugewiesen (Kategorie: {selectedRes.categoryCode || 'Online'})
+                    </span>
+                  ) : (
+                    `Zimmer ${selectedRes.room_code || selectedRoom?.roomCode}: ${selectedRes.room_name || selectedRoom?.name}`
+                  )}
                 </div>
                 <div className="font-mono text-xs text-slate-800 font-bold mt-1">
                   {selectedRes.arrivalDate} → {selectedRes.departureDate}

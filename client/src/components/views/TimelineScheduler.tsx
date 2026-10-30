@@ -35,6 +35,7 @@ interface BookingBarProps {
   isSelected: boolean;
   invoice?: Invoice;
   resInvoices?: Invoice[];
+  hasConflict?: boolean;
 }
 
 const BookingBar: React.FC<BookingBarProps> = ({
@@ -49,6 +50,7 @@ const BookingBar: React.FC<BookingBarProps> = ({
   isSelected,
   invoice,
   resInvoices = [],
+  hasConflict = false,
 }) => {
   const isLocked = !!reservation.isLockedToRoom;
   const isArrived = !!reservation.isArrived && !reservation.isDeparted;
@@ -83,10 +85,12 @@ const BookingBar: React.FC<BookingBarProps> = ({
   const endDay = depDate >= nextMonthStart ? totalDays + 1 : depDate.getDate();
   const daySpan = Math.max(1, endDay - startDay);
 
-  // Positionierung im CSS Grid
+  // Positionierung im CSS Grid: Strikt auf Zeile 1 fixieren (verhindert vertikale Fehlausrichtung / Zeilensprung)
   const gridStyle: React.CSSProperties = {
     gridColumnStart: startDay,
     gridColumnEnd: `span ${daySpan}`,
+    gridRowStart: 1,
+    gridRowEnd: 2,
   };
 
   const guestName = reservation.guest?.lastName || reservation.last_name || 'Gast';
@@ -105,7 +109,9 @@ const BookingBar: React.FC<BookingBarProps> = ({
 
   // Farbe nach Status (Harmonisierte matte & ruhige Naturpalette)
   let barBg = 'bg-[#cf8232] hover:bg-[#bd7428] text-slate-900 border-[#b06a1f]'; // Standard Reserviert (Mattes warmes Ocker)
-  if (isArrived) {
+  if (reservation.roomId === null || reservation.roomId === 0 || room.id === 0) {
+    barBg = 'bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold border-amber-600 shadow-sm animate-pulse'; // Unzugewiesene Online-Buchung (Tetris-Puffer)
+  } else if (isArrived) {
     barBg = 'bg-[#397356] hover:bg-[#306248] text-white border-[#27533c]'; // Im Haus (Mattes Salbeigrün)
   } else if (isDeparted) {
     barBg = 'bg-[#7f8c9b] hover:bg-[#6e7b8a] text-white border-[#616d7a]'; // Abgereist (Gedämpftes Schiefergrau)
@@ -130,10 +136,12 @@ const BookingBar: React.FC<BookingBarProps> = ({
         e.stopPropagation();
         onDoubleClick(reservation);
       }}
-      className={`relative h-9 my-auto rounded shadow-xs border px-2 flex items-center justify-between text-xs font-sans font-bold transition-all cursor-pointer ${
+      className={`relative h-9 my-auto rounded shadow-xs border px-2 flex items-center justify-between text-xs font-sans font-bold transition-all cursor-pointer pointer-events-auto ${
         isHovered ? 'z-50' : 'z-10'
       } ${barBg} ${
         isSelected ? 'ring-2 ring-[#5b8bb8] ring-offset-1 scale-[1.01]' : ''
+      } ${
+        hasConflict ? 'ring-2 ring-rose-500 shadow-md shadow-rose-500/40 border-rose-600 animate-pulse' : ''
       }`}
     >
       <div className="flex items-center gap-1.5 truncate">
@@ -141,6 +149,11 @@ const BookingBar: React.FC<BookingBarProps> = ({
         {!isArrived && !isDeparted && (
           <span className="font-mono font-black text-[#502d4b] bg-[#e5d0e2] px-1 py-0.5 rounded text-[10px] shrink-0">
             r
+          </span>
+        )}
+        {hasConflict && (
+          <span className="bg-rose-600 text-white font-black text-[9px] px-1 py-0.5 rounded shrink-0 shadow-xs uppercase tracking-tighter" title="Kollision / Überschneidung auf diesem Zimmer!">
+            Kollision
           </span>
         )}
         {isArrived && <CheckCircle2 className="w-4 h-4 text-white shrink-0" />}
@@ -239,16 +252,15 @@ const RoomRow: React.FC<RoomRowProps> = ({
         />
       ))}
 
-      {/* Überlagerte Buchungs-Balken */}
+      {/* Überlagerte Buchungs-Balken: Einzeilig mit 1fr für saubere Zentrierung ohne Zeilenversatz */}
       <div 
-        className="absolute inset-0 grid pointer-events-none"
-        style={{ gridTemplateColumns: `repeat(${days.length}, minmax(32px, 1fr))` }}
+        className="absolute inset-0 grid items-center pointer-events-none"
+        style={{ 
+          gridTemplateColumns: `repeat(${days.length}, minmax(32px, 1fr))`,
+          gridTemplateRows: '1fr',
+        }}
       >
-        <div className="col-span-full grid h-full items-center pointer-events-auto"
-          style={{ gridTemplateColumns: `repeat(${days.length}, minmax(32px, 1fr))` }}
-        >
-          {children}
-        </div>
+        {children}
       </div>
     </div>
   );
@@ -290,6 +302,51 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
     });
     return map;
   }, [invoices]);
+
+  const UNASSIGNED_VIRTUAL_ROOM: Room = useMemo(() => ({
+    id: 0,
+    roomCode: 'OTA',
+    name: '⚠️ Unzugewiesene Online-Buchungen',
+    categoryCode: 'OTA',
+    categoryName: 'Unzugewiesen',
+    baseBeds: 2,
+    maxCapacity: 4,
+    basePrice: 0,
+    floor: 'Online-Puffer',
+    sortOrder: 9999,
+    housekeepingStatus: 'clean',
+  }), []);
+
+  const allUnassignedReservations = useMemo(() => {
+    return reservations.filter(
+      (r) => (!r.roomId || r.roomId === 0) && r.status !== 'cancelled'
+    );
+  }, [reservations]);
+
+  const monthStartStr = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-01`;
+  }, [currentDate]);
+
+  const nextMonthStartStr = useMemo(() => {
+    const nextD = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
+    const y = nextD.getFullYear();
+    const m = String(nextD.getMonth() + 1).padStart(2, '0');
+    return `${y}-${m}-01`;
+  }, [currentDate]);
+
+  const currentMonthUnassigned = useMemo(() => {
+    return allUnassignedReservations
+      .filter((r) => r.departureDate > monthStartStr && r.arrivalDate < nextMonthStartStr)
+      .sort((a, b) => a.arrivalDate.localeCompare(b.arrivalDate));
+  }, [allUnassignedReservations, monthStartStr, nextMonthStartStr]);
+
+  const otherMonthUnassigned = useMemo(() => {
+    return allUnassignedReservations.filter(
+      (r) => !(r.departureDate > monthStartStr && r.arrivalDate < nextMonthStartStr)
+    );
+  }, [allUnassignedReservations, monthStartStr, nextMonthStartStr]);
 
   // Dialog-Zustände
   const [isStatusOpen, setIsStatusOpen] = useState<boolean>(false);
@@ -394,7 +451,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
           setNewResPreset({
             ...selectedRes,
             id: undefined,
-            reservationNumber: `18${Math.floor(100 + Math.random() * 900)}`,
+            reservationNumber: undefined,
           });
           setIsEditOpen(true);
         }
@@ -528,7 +585,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
             ref={leftColRef}
             className="flex-1 min-h-0 overflow-hidden grid"
             style={{
-              gridTemplateRows: rooms.length > 0 ? `repeat(${rooms.length}, minmax(38px, 1fr))` : undefined,
+              gridTemplateRows: rooms.length > 0 ? `repeat(${rooms.length + 1}, minmax(38px, 1fr))` : undefined,
             }}
           >
             {rooms.map((room) => {
@@ -550,6 +607,40 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                 </div>
               );
             })}
+
+            {/* USER-VORGABE: UNZUGEWIESEN-ZEILE GANZ AM ENDE DER LISTE */}
+            <div
+              className={`h-full px-2.5 flex items-center justify-between text-xs transition-colors border-b border-amber-300 min-w-0 ${
+                currentMonthUnassigned.length > 0 || otherMonthUnassigned.length > 0 ? 'bg-amber-100 font-bold text-amber-950' : 'bg-slate-50 text-slate-500'
+              }`}
+              title="Hier landen Online-Buchungen (DIRS21 / OTAs), die aufgrund voller oder gestückelter Belegung noch keinem festen Zimmer zugewiesen sind."
+            >
+              <div className="font-sans truncate text-xs min-w-0 pr-1 flex items-center gap-1.5">
+                <AlertTriangle className={`w-3.5 h-3.5 shrink-0 ${
+                  currentMonthUnassigned.length > 0 ? 'text-amber-600 animate-bounce' : otherMonthUnassigned.length > 0 ? 'text-amber-600' : 'text-slate-400'
+                }`} />
+                <span className="truncate">⚠️ Unzugewiesen ({currentMonthUnassigned.length})</span>
+                {otherMonthUnassigned.length > 0 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const firstOther = otherMonthUnassigned[0];
+                      const [tY, tM] = firstOther.arrivalDate.split('-').map(Number);
+                      setCurrentDate(new Date(tY, tM - 1, 1));
+                    }}
+                    className="ml-1 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-600 hover:bg-amber-700 text-white shadow-xs cursor-pointer shrink-0"
+                    title={`Zu unzugewiesener Buchung im ${new Date(otherMonthUnassigned[0].arrivalDate).toLocaleDateString('de-DE', { month: 'short', year: 'numeric' })} springen`}
+                  >
+                    <span>{new Date(otherMonthUnassigned[0].arrivalDate).toLocaleDateString('de-DE', { month: 'short' })} ({otherMonthUnassigned.length}) ↗</span>
+                  </button>
+                )}
+              </div>
+              <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                currentMonthUnassigned.length > 0 || otherMonthUnassigned.length > 0 ? 'bg-amber-200 text-amber-900 border-amber-400' : 'bg-slate-200 text-slate-600 border-slate-300'
+              }`}>
+                OTA
+              </span>
+            </div>
           </div>
         </div>
 
@@ -580,14 +671,14 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
             onScroll={handleGridScroll}
             className="flex-1 min-h-0 overflow-y-auto grid"
             style={{
-              gridTemplateRows: rooms.length > 0 ? `repeat(${rooms.length}, minmax(38px, 1fr))` : undefined,
+              gridTemplateRows: rooms.length > 0 ? `repeat(${rooms.length + 1}, minmax(38px, 1fr))` : undefined,
             }}
           >
             {rooms.map((room, roomIdx) => {
-              // Finde alle Reservierungen dieses Zimmers
-              const roomReservations = reservations.filter(
-                (r) => r.roomId === room.id || (r as any).room_id === room.id
-              );
+              // Finde alle Reservierungen dieses Zimmers, strikt chronologisch sortiert nach Anreisedatum
+              const roomReservations = reservations
+                .filter((r) => Number(r.roomId) === room.id || Number((r as any).room_id) === room.id)
+                .sort((a, b) => a.arrivalDate.localeCompare(b.arrivalDate));
 
               return (
                 <RoomRow
@@ -598,6 +689,9 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                 >
                   {roomReservations.map((res) => {
                     const resInvs = invoicesByReservation.get(res.id) || [];
+                    const hasConflict = roomReservations.some(
+                      (other) => other.id !== res.id && res.arrivalDate < other.departureDate && res.departureDate > other.arrivalDate
+                    );
                     return (
                       <BookingBar
                         key={res.id}
@@ -610,6 +704,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                         isSelected={selectedRes?.id === res.id}
                         invoice={resInvs[0] || invoiceMap.get(res.id)}
                         resInvoices={resInvs}
+                        hasConflict={hasConflict}
                         onSelect={(r) => setSelectedRes(r)}
                         onDoubleClick={(r) => {
                           setSelectedRes(r);
@@ -622,6 +717,60 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
                 </RoomRow>
               );
             })}
+
+            {/* USER-VORGABE: UNZUGEWIESEN-ZEILE GANZ AM ENDE DER TIMELINE-MATRIX */}
+            <RoomRow
+              key="unassigned-row"
+              room={UNASSIGNED_VIRTUAL_ROOM}
+              days={days}
+              onCellClick={handleCellClick}
+            >
+              {currentMonthUnassigned.map((res) => {
+                const resInvs = invoicesByReservation.get(res.id) || [];
+                const hasConflict = currentMonthUnassigned.some(
+                  (other) => other.id !== res.id && res.arrivalDate < other.departureDate && res.departureDate > other.arrivalDate
+                );
+                return (
+                  <BookingBar
+                    key={res.id}
+                    reservation={res}
+                    room={UNASSIGNED_VIRTUAL_ROOM}
+                    rowIndex={rooms.length}
+                    totalDays={totalDaysInMonth}
+                    monthStart={monthStart}
+                    nextMonthStart={nextMonthStart}
+                    isSelected={selectedRes?.id === res.id}
+                    invoice={resInvs[0] || invoiceMap.get(res.id)}
+                    resInvoices={resInvs}
+                    hasConflict={hasConflict}
+                    onSelect={(r) => setSelectedRes(r)}
+                    onDoubleClick={(r) => {
+                      setSelectedRes(r);
+                      setNewResPreset(r);
+                      setIsEditOpen(true);
+                    }}
+                  />
+                );
+              })}
+              {currentMonthUnassigned.length === 0 && otherMonthUnassigned.length > 0 && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-auto">
+                  <button
+                    onClick={() => {
+                      const firstOther = otherMonthUnassigned[0];
+                      const [tY, tM] = firstOther.arrivalDate.split('-').map(Number);
+                      setCurrentDate(new Date(tY, tM - 1, 1));
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-300 text-xs font-semibold shadow-xs cursor-pointer transition-all"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                    <span>
+                      {otherMonthUnassigned.length} unzugewiesene Online-Buchung(en) im {new Date(otherMonthUnassigned[0].arrivalDate).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })}
+                    </span>
+                    <span className="underline font-bold">Jetzt anzeigen ↗</span>
+                  </button>
+                </div>
+              )}
+            </RoomRow>
           </div>
 
         </div>
@@ -733,7 +882,7 @@ export const TimelineScheduler: React.FC<TimelineSchedulerProps> = ({
             setNewResPreset({
               ...selectedRes,
               id: undefined,
-              reservationNumber: `18${Math.floor(100 + Math.random() * 900)}`,
+              reservationNumber: undefined,
             });
             setIsEditOpen(true);
           }

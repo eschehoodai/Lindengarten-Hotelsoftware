@@ -7,6 +7,7 @@ import {
   MapPin, Phone, Mail, CreditCard, Building, Calendar, IdCard, Filter, FileText 
 } from 'lucide-react';
 import { MeldescheinPdfDocument } from '../pdf/MeldescheinPdfDocument';
+import { fetchPreviewNumber, calculateNextGuestNumber } from '../../services/sequenceClient';
 
 interface GuestsViewProps {
   guests: Guest[];
@@ -85,10 +86,13 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
   }, [guests, searchQuery, filterMode]);
 
   // Actions
-  const handleStartNew = () => {
+  const handleStartNew = async () => {
     setIsNew(true);
     setIsEditing(true);
-    const nextNumber = `G-${new Date().getFullYear()}-${String(guests.length + 1).padStart(4, '0')}`;
+    let nextNumber = await fetchPreviewNumber('GUEST');
+    if (!nextNumber) {
+      nextNumber = calculateNextGuestNumber(guests);
+    }
     setFormData({
       guestNumber: nextNumber,
       searchName: '',
@@ -117,11 +121,14 @@ export const GuestsView: React.FC<GuestsViewProps> = ({
     });
   };
 
-  const handleStartCopy = () => {
+  const handleStartCopy = async () => {
     if (!selectedGuest) return;
     setIsNew(true);
     setIsEditing(true);
-    const nextNumber = `G-${new Date().getFullYear()}-${String(guests.length + 1).padStart(4, '0')}`;
+    let nextNumber = await fetchPreviewNumber('GUEST');
+    if (!nextNumber) {
+      nextNumber = calculateNextGuestNumber(guests);
+    }
     setFormData({
       ...selectedGuest,
       id: undefined,

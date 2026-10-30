@@ -7,6 +7,7 @@
     "dev:server": "npm --prefix server run dev",
     "dev:client": "npm --prefix client run dev",
     "seed": "npm --prefix server run seed",
+    "db:production-reset": "npm --prefix server run production:reset",
     "build": "npm --prefix client run build && npm --prefix server run build",
     "test": "npm --prefix client run test"
   }

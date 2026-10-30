@@ -9,6 +9,8 @@ import { fileURLToPath } from 'url';
 import { db, client, schema } from './db/index.js';
 import { eq, desc } from 'drizzle-orm';
 import { fiskalyService } from './services/fiskalyService.js';
+import { dirs21Service } from './services/dirs21/dirs21Service.js';
+import { sequenceService, SequenceType } from './services/sequenceService.js';
 import {
   FALLBACK_ROOMS,
   FALLBACK_GUESTS,
@@ -141,6 +143,9 @@ app.get('/api/guests', async (req, res) => {
 
 app.post('/api/guests', async (req, res) => {
   const { id: _, ...guestInsertData } = req.body;
+  if (!guestInsertData.guestNumber || guestInsertData.guestNumber === 'Neu' || guestInsertData.guestNumber.startsWith('G-TEMP')) {
+    guestInsertData.guestNumber = await sequenceService.getNextNumber('GUEST');
+  }
   try {
     if (db) {
       const newGuest = await db.insert(schema.guests).values({
@@ -205,8 +210,32 @@ function extractReservationData(body: any) {
     data.reservationNumber = String(body.reservationNumber ?? body.reservation_number);
   if (body.guestId !== undefined || body.guest_id !== undefined)
     data.guestId = Number(body.guestId ?? body.guest_id);
-  if (body.roomId !== undefined || body.room_id !== undefined)
-    data.roomId = Number(body.roomId ?? body.room_id);
+  if (body.roomId !== undefined || body.room_id !== undefined) {
+    const rawRoom = body.roomId !== undefined ? body.roomId : body.room_id;
+    data.roomId = (rawRoom === null || rawRoom === '' || rawRoom === undefined || Number(rawRoom) === 0) ? null : Number(rawRoom);
+  }
+  if (body.status !== undefined) data.status = String(body.status);
+
+  // Automatische Status-Synchronisation für unzugewiesene vs. zugewiesene Buchungen
+  if (data.roomId !== undefined) {
+    if (data.roomId !== null && data.roomId > 0) {
+      if (!data.status || data.status === 'unassigned') {
+        data.status = 'confirmed';
+      }
+    } else {
+      data.status = 'unassigned';
+    }
+  }
+  if (body.externalReservationId !== undefined || body.external_reservation_id !== undefined)
+    data.externalReservationId = body.externalReservationId ?? body.external_reservation_id;
+  if (body.channelSource !== undefined || body.channel_source !== undefined)
+    data.channelSource = body.channelSource ?? body.channel_source;
+  if (body.otaConfirmationCode !== undefined || body.ota_confirmation_code !== undefined)
+    data.otaConfirmationCode = body.otaConfirmationCode ?? body.ota_confirmation_code;
+  if (body.lastSyncedAt !== undefined || body.last_synced_at !== undefined)
+    data.lastSyncedAt = body.lastSyncedAt ?? body.last_synced_at;
+  if (body.categoryCode !== undefined || body.category_code !== undefined)
+    data.categoryCode = body.categoryCode ?? body.category_code;
   if (body.arrivalDate !== undefined || body.arrival_date !== undefined)
     data.arrivalDate = String(body.arrivalDate ?? body.arrival_date);
   if (body.departureDate !== undefined || body.departure_date !== undefined)
@@ -341,8 +370,34 @@ app.get('/api/reservations', async (req, res) => {
   res.json(memoryReservations);
 });
 
+async function triggerCategorySyncForRoom(
+  roomId: number | null | undefined,
+  dateFrom: string,
+  dateTo: string,
+  fallbackCategoryCode?: string | null
+) {
+  try {
+    if (client) {
+      if (roomId) {
+        const r = await client.execute({ sql: `SELECT category_code FROM rooms WHERE id = ?`, args: [roomId] });
+        if (r.rows && r.rows[0]) {
+          const cat = String(r.rows[0].category_code);
+          dirs21Service.notifyAvailabilityChange(cat, dateFrom, dateTo);
+        }
+      } else if (fallbackCategoryCode) {
+        dirs21Service.notifyAvailabilityChange(fallbackCategoryCode, dateFrom, dateTo);
+      }
+    }
+  } catch (err: any) {
+    console.warn('triggerCategorySyncForRoom error:', err?.message);
+  }
+}
+
 app.post('/api/reservations', async (req, res) => {
   const cleanData = extractReservationData(req.body);
+  if (!cleanData.reservationNumber || cleanData.reservationNumber === 'NEU' || cleanData.reservationNumber.startsWith('TEMP')) {
+    cleanData.reservationNumber = await sequenceService.getNextNumber('RESERVATION');
+  }
   try {
     if (db) {
       const newRes = await db.insert(schema.reservations).values({
@@ -351,6 +406,7 @@ app.post('/api/reservations', async (req, res) => {
       }).returning();
       if (newRes && newRes[0]) {
         broadcastEvent('RESERVATIONS_CHANGED', { action: 'create', reservation: newRes[0] });
+        triggerCategorySyncForRoom(newRes[0].roomId, newRes[0].arrivalDate, newRes[0].departureDate);
         return res.status(201).json(newRes[0]);
       }
     }
@@ -364,6 +420,7 @@ app.post('/api/reservations', async (req, res) => {
   };
   memoryReservations.push(fallbackRes);
   broadcastEvent('RESERVATIONS_CHANGED', { action: 'create', reservation: fallbackRes });
+  triggerCategorySyncForRoom(fallbackRes.roomId, fallbackRes.arrivalDate, fallbackRes.departureDate);
   res.status(201).json(fallbackRes);
 });
 
@@ -372,9 +429,17 @@ app.put('/api/reservations/:id', async (req, res) => {
   const cleanData = extractReservationData(req.body);
   try {
     if (db) {
+      const prevRes = await db.select().from(schema.reservations).where(eq(schema.reservations.id, Number(id))).limit(1);
       await db.update(schema.reservations)
         .set(cleanData)
         .where(eq(schema.reservations.id, Number(id)));
+
+      if (prevRes && prevRes[0]) {
+        triggerCategorySyncForRoom(prevRes[0].roomId, prevRes[0].arrivalDate, prevRes[0].departureDate, prevRes[0].categoryCode);
+      }
+      if (cleanData.arrivalDate && cleanData.departureDate) {
+        triggerCategorySyncForRoom(cleanData.roomId, cleanData.arrivalDate, cleanData.departureDate, cleanData.categoryCode);
+      }
     }
   } catch (err: any) {
     console.warn('DB update failed for reservation:', err.message);
@@ -389,16 +454,65 @@ app.put('/api/reservations/:id', async (req, res) => {
 
 app.delete('/api/reservations/:id', async (req, res) => {
   const { id } = req.params;
+  const numId = Number(id);
   try {
     if (db) {
-      await db.delete(schema.reservations).where(eq(schema.reservations.id, Number(id)));
+      const prevRes = await db.select().from(schema.reservations).where(eq(schema.reservations.id, numId)).limit(1);
+
+      // 1. Verknüpfte Rechnungen & Folio-Items behandeln, um SQLite Foreign-Key Constraint Fehler zu vermeiden
+      const linkedInvoices = await db.select({
+        id: schema.invoices.id,
+        status: schema.invoices.status,
+        isPaid: schema.invoices.isPaid,
+      })
+        .from(schema.invoices)
+        .where(eq(schema.invoices.reservationId, numId));
+
+      for (const inv of linkedInvoices) {
+        // Offene, unbezahlte Entwurfsrechnungen kaskadierend mitlöschen
+        if (!inv.isPaid && (inv.status === 'OFFEN' || inv.status === 'draft' || !inv.status)) {
+          await db.delete(schema.invoiceItems).where(eq(schema.invoiceItems.invoiceId, inv.id));
+          await db.delete(schema.invoices).where(eq(schema.invoices.id, inv.id));
+        } else {
+          // Bereits finalisierte/bezahlte Rechnungen (GoBD) behalten, aber Verknüpfung freigeben
+          await db.update(schema.invoices).set({ reservationId: null }).where(eq(schema.invoices.id, inv.id));
+        }
+      }
+
+      await db.delete(schema.reservations).where(eq(schema.reservations.id, numId));
+      if (prevRes && prevRes[0]) {
+        triggerCategorySyncForRoom(prevRes[0].roomId, prevRes[0].arrivalDate, prevRes[0].departureDate, prevRes[0].categoryCode);
+      }
+    } else if (client) {
+      const invRows = await client.execute({
+        sql: `SELECT id, status, is_paid FROM invoices WHERE reservation_id = ?`,
+        args: [numId],
+      });
+      for (const row of (invRows.rows || [])) {
+        const invId = Number(row.id);
+        const isPaid = Boolean(row.is_paid);
+        const status = String(row.status || '');
+        if (!isPaid && (status === 'OFFEN' || status === 'draft' || status === '')) {
+          await client.execute({ sql: `DELETE FROM invoice_items WHERE invoice_id = ?`, args: [invId] });
+          await client.execute({ sql: `DELETE FROM invoices WHERE id = ?`, args: [invId] });
+        } else {
+          await client.execute({ sql: `UPDATE invoices SET reservation_id = NULL WHERE id = ?`, args: [invId] });
+        }
+      }
+      await client.execute({ sql: `DELETE FROM reservations WHERE id = ?`, args: [numId] });
     }
   } catch (err: any) {
-    console.warn('DB delete failed for reservation:', err.message);
+    console.error('DB delete failed for reservation:', err.message);
+    return res.status(500).json({ error: `Buchung konnte nicht gelöscht werden: ${err.message}` });
   }
-  const idx = memoryReservations.findIndex((x: any) => x.id === Number(id));
-  if (idx !== -1) memoryReservations.splice(idx, 1);
-  broadcastEvent('RESERVATIONS_CHANGED', { action: 'delete', reservationId: Number(id) });
+
+  const idx = memoryReservations.findIndex((x: any) => x.id === numId);
+  if (idx !== -1) {
+    const deleted = memoryReservations.splice(idx, 1)[0];
+    if (deleted) triggerCategorySyncForRoom(deleted.roomId, deleted.arrivalDate, deleted.departureDate, deleted.categoryCode);
+  }
+  broadcastEvent('RESERVATIONS_CHANGED', { action: 'delete', reservationId: numId });
+  broadcastEvent('INVOICES_CHANGED', { action: 'delete', reservationId: numId });
   res.json({ success: true });
 });
 
@@ -461,7 +575,7 @@ app.put('/api/invoice-items/:id/folio', async (req, res) => {
 async function ensureTseSigned(invData: any) {
   const isPaidOrStorno = Boolean(invData.isPaid || invData.status === 'BEZAHLT' || invData.status === 'STORNO_BELEG');
   const needsSigning = isPaidOrStorno && (!invData.tseSignature || invData.tseSignature.startsWith('SIG-') || invData.tseTransactionId?.startsWith('TSE-2026-'));
-  
+
   if (needsSigning) {
     const isStorno = invData.status === 'STORNO_BELEG' || invData.invoiceNumber?.endsWith('-S');
     const signRes = await fiskalyService.signInvoiceTransaction({
@@ -494,6 +608,13 @@ async function ensureTseSigned(invData: any) {
 
 app.post('/api/invoices', async (req, res) => {
   const invData = req.body;
+  if (!invData.invoiceNumber || invData.invoiceNumber === 'NEU' || invData.invoiceNumber.startsWith('TEMP')) {
+    if (!invData.reservationId) {
+      invData.invoiceNumber = await sequenceService.getNextNumber('CASH_RECEIPT');
+    } else {
+      invData.invoiceNumber = await sequenceService.getNextNumber('INVOICE');
+    }
+  }
   await ensureTseSigned(invData);
   const { items, guest, reservation, ...dbInvoiceData } = invData;
   try {
@@ -552,8 +673,8 @@ app.post('/api/invoices', async (req, res) => {
   }
 
   // Memory fallback
-  const idx = memoryInvoices.findIndex((x: any) => 
-    (invData.id && x.id === invData.id) || 
+  const idx = memoryInvoices.findIndex((x: any) =>
+    (invData.id && x.id === invData.id) ||
     (invData.reservationId && x.reservationId === invData.reservationId) ||
     (invData.invoiceNumber && x.invoiceNumber === invData.invoiceNumber)
   );
@@ -840,6 +961,89 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// -------------------------------------------------------------
+// 7. DIRS21 Channel Manager Endpunkte (2-Wege Light)
+// -------------------------------------------------------------
+
+// Konfiguration laden
+app.get('/api/channel/config', (req, res) => {
+  res.json(dirs21Service.getConfig());
+});
+
+// Konfiguration aktualisieren
+app.post('/api/channel/config', (req, res) => {
+  const updated = dirs21Service.updateConfig(req.body);
+  res.json(updated);
+});
+
+// Zimmerkategorie-Mappings abrufen
+app.get('/api/channel/mappings', async (req, res) => {
+  const mappings = await dirs21Service.getMappings();
+  res.json(mappings);
+});
+
+// Zimmerkategorie-Mapping aktualisieren
+app.put('/api/channel/mappings/:id', async (req, res) => {
+  const { id } = req.params;
+  const updated = await dirs21Service.updateMapping(Number(id), req.body);
+  res.json(updated);
+});
+
+// Verbindungstest durchführen
+app.post('/api/channel/test-connection', async (req, res) => {
+  const result = await dirs21Service.testConnection();
+  res.json(result);
+});
+
+// Manuellen Full-Sync aller Kategorien anstoßen
+app.post('/api/channel/sync-now', async (req, res) => {
+  const lookahead = Number(req.body?.lookaheadDays) || 365;
+  const result = await dirs21Service.triggerFullSync(lookahead);
+  res.json({ success: true, message: `${result.queuedCount} Zimmerkategorien für die nächsten ${lookahead} Tage in Outbound-Sync eingereiht.` });
+});
+
+// Manuelles Inbound-Polling anstoßen
+app.post('/api/channel/poll-now', async (req, res) => {
+  const result = await dirs21Service.triggerInboundPoll();
+  res.json({ success: true, processedCount: result.processedCount });
+});
+
+// Mock-Buchung simulieren
+app.post('/api/channel/simulate-booking', async (req, res) => {
+  const scenario = req.body?.scenario || 'clean';
+  const result = await dirs21Service.simulateMockBooking(scenario);
+  broadcastEvent('RESERVATIONS_CHANGED', { action: 'simulate_booking', scenario });
+  res.json(result);
+});
+
+// Revisions-Logs für Admin-Inspektor abrufen
+app.get('/api/channel/logs', async (req, res) => {
+  const limit = Math.min(100, Number(req.query.limit) || 50);
+  const logs = await dirs21Service.getRecentLogs(limit);
+  res.json(logs);
+});
+
+// Nummernkreise & Sequenzen (Vorschau und Zählerabruf)
+app.get('/api/sequences/preview', async (req, res) => {
+  try {
+    const type = String(req.query.type || 'RESERVATION').toUpperCase() as SequenceType;
+    const nextNumber = await sequenceService.peekNextNumber(type);
+    res.json({ type, nextNumber });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/sequences/next', async (req, res) => {
+  try {
+    const type = String(req.body?.type || 'RESERVATION').toUpperCase() as SequenceType;
+    const number = await sequenceService.getNextNumber(type);
+    res.json({ type, number });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Statische Dateien des Frontends (client/dist) ausliefern
 const clientDistPath = path.resolve(__dirname, '../../client/dist');
 if (fs.existsSync(clientDistPath)) {
@@ -857,6 +1061,7 @@ if (!process.env.VERCEL && process.env.NODE_ENV !== 'test') {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`🏨 Lindengarten Backend Server läuft auf Port ${PORT}`);
     console.log(`🌐 Erreichbar im lokalen Netzwerk für Rezeptions-PCs unter: http://localhost:${PORT}`);
+    dirs21Service.init(broadcastEvent);
   });
 }
 
