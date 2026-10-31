@@ -5,7 +5,7 @@ import {
   Search, Plus, Trash2, Calendar, BedDouble, Edit3, Eye,
   Check, Save, DollarSign, HeartHandshake,
   FilePlus2, ArrowRightLeft, Receipt, X,
-  Lock, RotateCcw, Ban, AlertTriangle, Sparkles
+  Lock, RotateCcw, Ban, AlertTriangle, Sparkles, RefreshCw
 } from 'lucide-react';
 import type { Reservation, Room, Guest, Invoice, PriceVariant } from '../../types';
 import { 
@@ -18,6 +18,7 @@ import {
   createFreeInvoice,
   recalculateInvoiceTotals, 
   calculateBreakfastSplit,
+  hydrateInvoiceRecipient,
   DEFAULT_CLOSING_TEXT 
 } from '../../services/invoiceGenerator';
 import { fetchNextNumber, calculateNextCashReceiptNumber } from '../../services/sequenceClient';
@@ -201,8 +202,11 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
     if (selectedType === 'reservation' && activeReservation) {
       if (bookingInvoices.length > 0) {
         const found = bookingInvoices.find((i) => i.id === activeInvoiceId) || bookingInvoices[0];
-        // Leere Zweitrechnungen / Folios bleiben leer und ziehen keine Logis-Positionen erneut an!
-        setCurrentInvoice(found);
+        const resGuest = activeReservation.guest || guests.find((g) => g.id === activeReservation.guestId);
+        const resRoom = activeReservation.room || rooms.find((r) => r.id === activeReservation.roomId);
+        // Falls Rechnungsdaten aus der DB noch keine Anschrift hatten, automatisch aus Gaststamm hydrieren
+        const hydrated = hydrateInvoiceRecipient(found, activeReservation, resGuest, resRoom);
+        setCurrentInvoice(hydrated);
         if (activeInvoiceId !== found.id) {
           setActiveInvoiceId(found.id);
         }
@@ -249,6 +253,36 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
       totalGross: Number(it.totalGross) || 0,
     })),
   });
+
+  // Adressdaten und Briefanrede manuell aus dem verknüpften Gaststamm aktualisieren
+  const handleRefreshRecipientFromGuest = () => {
+    if (!currentInvoice || isInvoiceLocked) return;
+    const res = activeReservation;
+    const resGuest = res?.guest || guests.find((g) => g.id === (res?.guestId || currentInvoice.guestId));
+    const resRoom = res?.room || rooms.find((r) => r.id === (res?.roomId || Number(currentInvoice.roomCode)));
+    if (!resGuest && !res) {
+      alert('Kein verknüpfter Gaststamm für diese Rechnung gefunden.');
+      return;
+    }
+    const refreshed = hydrateInvoiceRecipient(
+      {
+        ...currentInvoice,
+        recipientName: '',
+        recipientSalutation: '',
+        recipientCompany: '',
+        recipientStreet: '',
+        recipientZip: '',
+        recipientCity: '',
+        recipientCountry: '',
+        roomName: '',
+        roomCode: '',
+      },
+      res,
+      resGuest,
+      resRoom
+    );
+    setCurrentInvoice(refreshed);
+  };
 
   // Position hinzufügen (immer komplett leer)
   const handleAddItem = () => {
@@ -1413,7 +1447,21 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                       <User className="w-4 h-4 text-[#376189]" />
                       <span>Rechnungsempfänger & Anschrift</span>
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium">DIN 5008 Adressfeld</span>
+                    <div className="flex items-center gap-2">
+                      {selectedType === 'reservation' && (
+                        <button
+                          type="button"
+                          onClick={handleRefreshRecipientFromGuest}
+                          disabled={isInvoiceLocked}
+                          title="Aktuelle Anschrift und Gastdaten aus dem Gaststamm neu laden"
+                          className="text-[11px] font-bold text-[#376189] hover:text-[#234362] bg-[#f0f5fa] hover:bg-[#e2edf7] border border-[#c5d8ea] px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          <RefreshCw className="w-3 h-3 text-[#376189]" />
+                          <span>Aus Gaststamm laden</span>
+                        </button>
+                      )}
+                      <span className="text-[11px] text-slate-500 font-medium">DIN 5008 Adressfeld</span>
+                    </div>
                   </div>
 
                   {/* Anrede-Auswahl */}
@@ -1422,34 +1470,42 @@ export const InvoicesView: React.FC<InvoicesViewProps> = ({
                       BRIEFANREDE <span className="text-rose-600 font-bold ml-1">*</span>
                     </label>
                     <div className="flex gap-2">
-                      <select
-                        value={
-                          ['Sehr geehrter Herr', 'Sehr geehrte Frau', 'Sehr geehrte Familie', 'Sehr geehrte Damen und Herren'].includes(currentInvoice.recipientSalutation?.split(' ')[0] || '')
-                            ? currentInvoice.recipientSalutation
-                            : 'custom'
-                        }
-                        disabled={isInvoiceLocked}
-                        onChange={(e) => {
-                          if (e.target.value !== 'custom') {
-                            setCurrentInvoice({ ...currentInvoice, recipientSalutation: e.target.value });
-                          }
-                        }}
-                        className={`bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-medium text-slate-900 w-48 shadow-2xs ${isInvoiceLocked ? 'opacity-80 cursor-not-allowed bg-slate-100' : ''}`}
-                      >
-                        <option value={`Sehr geehrte Familie ${currentInvoice.recipientName?.split(' ').pop() || ''}`}>
-                          Sehr geehrte Familie...
-                        </option>
-                        <option value={`Sehr geehrter Herr ${currentInvoice.recipientName?.split(' ').pop() || ''}`}>
-                          Sehr geehrter Herr...
-                        </option>
-                        <option value={`Sehr geehrte Frau ${currentInvoice.recipientName?.split(' ').pop() || ''}`}>
-                          Sehr geehrte Frau...
-                        </option>
-                        <option value="Sehr geehrte Damen und Herren">
-                          Sehr geehrte Damen und Herren
-                        </option>
-                        <option value="custom">Eigener Text...</option>
-                      </select>
+                      {(() => {
+                        const lastName = currentInvoice.recipientName?.trim().split(' ').pop() || '';
+                        const optHerr = `Sehr geehrter Herr ${lastName}`.trim();
+                        const optFrau = `Sehr geehrte Frau ${lastName}`.trim();
+                        const optFamilie = `Sehr geehrte Familie ${lastName}`.trim();
+                        const optDamenHerren = 'Sehr geehrte Damen und Herren';
+                        const curSal = currentInvoice.recipientSalutation || '';
+                        const isMatch = [optHerr, optFrau, optFamilie, optDamenHerren].includes(curSal);
+
+                        return (
+                          <select
+                            value={isMatch ? curSal : 'custom'}
+                            disabled={isInvoiceLocked}
+                            onChange={(e) => {
+                              if (e.target.value !== 'custom') {
+                                setCurrentInvoice({ ...currentInvoice, recipientSalutation: e.target.value });
+                              }
+                            }}
+                            className={`bg-slate-50 border border-slate-300 rounded px-2.5 py-1.5 text-xs md:text-[13px] font-medium text-slate-900 w-52 shadow-2xs ${isInvoiceLocked ? 'opacity-80 cursor-not-allowed bg-slate-100' : ''}`}
+                          >
+                            <option value={optHerr}>
+                              Sehr geehrter Herr {lastName}
+                            </option>
+                            <option value={optFrau}>
+                              Sehr geehrte Frau {lastName}
+                            </option>
+                            <option value={optFamilie}>
+                              Sehr geehrte Familie {lastName}
+                            </option>
+                            <option value={optDamenHerren}>
+                              Sehr geehrte Damen und Herren
+                            </option>
+                            <option value="custom">Eigener Text...</option>
+                          </select>
+                        );
+                      })()}
 
                       <input
                         type="text"

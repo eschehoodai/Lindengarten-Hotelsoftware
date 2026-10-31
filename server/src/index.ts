@@ -529,13 +529,60 @@ app.get('/api/invoices', async (req, res) => {
         orderBy: desc(schema.invoices.id),
       });
       if (allInvoices && allInvoices.length > 0) {
-        return res.json(allInvoices);
+        const enriched = allInvoices.map((inv: any) => {
+          const g = inv.guest;
+          const r = inv.reservation;
+          const recipientName = inv.recipientName || (g ? `${g.firstName || ''} ${g.lastName || ''}`.trim() : (r?.last_name || ''));
+          const recipientSalutation = inv.recipientSalutation || (g?.salutation ? `${g.salutation} ${g.lastName || ''}`.trim() : '');
+          const recipientCompany = inv.recipientCompany || g?.name2 || (r?.billingDebitor && r.billingDebitor !== g?.lastName ? r.billingDebitor : '') || '';
+          const recipientStreet = inv.recipientStreet || (g ? `${g.street || ''} ${g.houseNumber || ''}`.trim() : '');
+          const recipientZip = inv.recipientZip || g?.zipCode || '';
+          const recipientCity = inv.recipientCity || g?.city || '';
+          const recipientCountry = inv.recipientCountry || g?.country || 'Deutschland';
+          const roomCode = inv.roomCode || r?.room_code || (r?.roomId ? String(r.roomId) : '');
+          const roomName = inv.roomName || r?.room_name || (r?.roomId ? `Zimmer ${r.roomId}` : '');
+          const nights = inv.nights ?? (r?.nights || 1);
+          const billingDebitor = inv.billingDebitor || r?.billingDebitor || (g ? g.lastName : '');
+          return {
+            ...inv,
+            recipientSalutation,
+            recipientName,
+            recipientCompany,
+            recipientStreet,
+            recipientZip,
+            recipientCity,
+            recipientCountry,
+            roomCode,
+            roomName,
+            nights,
+            billingDebitor,
+          };
+        });
+        return res.json(enriched);
       }
     }
   } catch (err: any) {
     console.warn('DB query failed for invoices:', err.message);
   }
-  res.json(memoryInvoices);
+  const enrichedMemory = memoryInvoices.map((inv: any) => {
+    const g = inv.guest;
+    const r = inv.reservation;
+    return {
+      ...inv,
+      recipientName: inv.recipientName || (g ? `${g.firstName || ''} ${g.lastName || ''}`.trim() : (r?.last_name || '')),
+      recipientSalutation: inv.recipientSalutation || (g?.salutation ? `${g.salutation} ${g.lastName || ''}`.trim() : ''),
+      recipientCompany: inv.recipientCompany || g?.name2 || (r?.billingDebitor && r.billingDebitor !== g?.lastName ? r.billingDebitor : '') || '',
+      recipientStreet: inv.recipientStreet || (g ? `${g.street || ''} ${g.houseNumber || ''}`.trim() : ''),
+      recipientZip: inv.recipientZip || g?.zipCode || '',
+      recipientCity: inv.recipientCity || g?.city || '',
+      recipientCountry: inv.recipientCountry || g?.country || 'Deutschland',
+      roomCode: inv.roomCode || r?.room_code || (r?.roomId ? String(r.roomId) : ''),
+      roomName: inv.roomName || r?.room_name || (r?.roomId ? `Zimmer ${r.roomId}` : ''),
+      nights: inv.nights ?? (r?.nights || 1),
+      billingDebitor: inv.billingDebitor || r?.billingDebitor || (g ? g.lastName : ''),
+    };
+  });
+  res.json(enrichedMemory);
 });
 
 app.get('/api/invoices/:id/items', async (req, res) => {

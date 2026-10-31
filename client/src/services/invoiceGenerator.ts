@@ -106,6 +106,75 @@ export function calculateBreakfastSplit(config: BreakfastSplitConfig) {
 }
 
 /**
+ * Hydriert bzw. vervollständigt Empfänger-, Zimmer- und Adressdaten einer Rechnung
+ * anhand der verknüpften Reservierungs- und Gaststammdaten.
+ */
+export function hydrateInvoiceRecipient(
+  invoice: Invoice,
+  reservation?: Reservation | null,
+  guest?: Guest | null,
+  room?: Room | null
+): Invoice {
+  const g = guest || reservation?.guest;
+  const r = reservation;
+  const rm = room || r?.room;
+
+  let recipientSalutation = invoice.recipientSalutation;
+  if (!recipientSalutation) {
+    if (g?.salutation) {
+      recipientSalutation = `${g.salutation} ${g.lastName || ''}`.trim();
+    } else if (g?.titleCode === 3) {
+      recipientSalutation = `Sehr geehrte Familie ${g?.lastName || ''}`.trim();
+    } else if (g?.titleCode === 2) {
+      recipientSalutation = `Sehr geehrte Frau ${g?.lastName || ''}`.trim();
+    } else if (g?.titleCode === 4) {
+      recipientSalutation = 'Sehr geehrte Damen und Herren';
+    } else if (g?.lastName) {
+      recipientSalutation = `Sehr geehrter Herr ${g.lastName}`.trim();
+    } else {
+      recipientSalutation = 'Sehr geehrte Damen und Herren';
+    }
+  }
+
+  const recipientName = invoice.recipientName || 
+    (g ? `${g.firstName || ''} ${g.lastName || ''}`.trim() : '') || 
+    r?.last_name || 
+    'Gast';
+
+  const recipientCompany = invoice.recipientCompany !== undefined && invoice.recipientCompany !== '' 
+    ? invoice.recipientCompany 
+    : (g?.name2 || (r?.billingDebitor && r.billingDebitor !== g?.lastName ? r.billingDebitor : '') || '');
+
+  const streetPart = g ? `${g.street || ''} ${g.houseNumber || ''}`.trim() : '';
+  const recipientStreet = invoice.recipientStreet || streetPart;
+  const recipientZip = invoice.recipientZip || g?.zipCode || '';
+  const recipientCity = invoice.recipientCity || g?.city || '';
+  const recipientCountry = invoice.recipientCountry || g?.country || 'Deutschland';
+
+  const roomName = invoice.roomName || rm?.name || r?.room_name || (r?.roomId ? `Zimmer ${r.roomId}` : '');
+  const roomCode = invoice.roomCode || rm?.roomCode || r?.room_code || (r?.roomId ? `${r.roomId}` : '');
+  const nights = invoice.nights || r?.nights || 1;
+  const billingDebitor = invoice.billingDebitor || r?.billingDebitor || (g ? g.lastName : '');
+
+  return {
+    ...invoice,
+    recipientSalutation,
+    recipientName,
+    recipientCompany,
+    recipientStreet,
+    recipientZip,
+    recipientCity,
+    recipientCountry,
+    roomName,
+    roomCode,
+    nights,
+    billingDebitor,
+    guest: g || invoice.guest,
+    reservation: r || invoice.reservation,
+  };
+}
+
+/**
  * Erstellt oder aktualisiert eine Rechnung aus den Buchungsdaten einer Reservierung.
  */
 export function generateInvoiceFromReservation(

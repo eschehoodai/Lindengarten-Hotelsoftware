@@ -148,14 +148,20 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
                   {invoice.recipientCompany && (
                     <div className="font-bold text-slate-900">{invoice.recipientCompany}</div>
                   )}
-                  {invoice.billingDebitor && invoice.billingDebitor !== invoice.recipientName && (
+                  {invoice.billingDebitor && invoice.billingDebitor !== invoice.recipientName && invoice.billingDebitor !== invoice.recipientCompany && (
                     <div className="text-slate-600 text-[11px]">z. Hd. {invoice.billingDebitor}</div>
                   )}
-                  <div className="font-semibold text-slate-900">{invoice.recipientName}</div>
-                  <div>{invoice.recipientStreet || 'Lindenallee 12'}</div>
-                  <div>
-                    {invoice.recipientZip || '04109'} {invoice.recipientCity || 'Leipzig'}
-                  </div>
+                  {invoice.recipientName && (
+                    <div className="font-semibold text-slate-900">{invoice.recipientName}</div>
+                  )}
+                  {invoice.recipientStreet && (
+                    <div>{invoice.recipientStreet}</div>
+                  )}
+                  {(invoice.recipientZip || invoice.recipientCity) && (
+                    <div>
+                      {invoice.recipientZip} {invoice.recipientCity}
+                    </div>
+                  )}
                   {invoice.recipientCountry && invoice.recipientCountry !== 'Deutschland' && (
                     <div className="text-[11px] uppercase tracking-wider text-slate-600">{invoice.recipientCountry}</div>
                   )}
@@ -179,12 +185,12 @@ export const InvoicePdfDocument: React.FC<InvoicePdfDocumentProps> = ({
               </div>
               <div className="flex justify-between items-baseline">
                 <span className="text-[11px] text-slate-500">Aufenthalt</span>
-                <span className="text-slate-800 text-[11px] font-medium">{invoice.nights} Übernachtung(en)</span>
+                <span className="text-slate-800 text-[11px] font-medium">{invoice.nights || 1} Übernachtung(en)</span>
               </div>
-              {invoice.roomName && (
+              {(invoice.roomName || invoice.roomCode) && (
                 <div className="flex justify-between items-baseline">
                   <span className="text-[11px] text-slate-500">Zimmer / Einheit</span>
-                  <span className="font-semibold text-slate-800 text-[11px]">{invoice.roomName}</span>
+                  <span className="font-semibold text-slate-800 text-[11px]">{invoice.roomName || `Zimmer ${invoice.roomCode}`}</span>
                 </div>
               )}
               <div className="flex justify-between items-baseline pt-1 border-t border-slate-100">

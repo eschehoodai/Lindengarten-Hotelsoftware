@@ -3,7 +3,8 @@ import {
   generateInvoiceFromReservation, 
   createAdditionalInvoice, 
   createFreeInvoice, 
-  recalculateInvoiceTotals 
+  recalculateInvoiceTotals,
+  hydrateInvoiceRecipient 
 } from './invoiceGenerator';
 import type { Reservation, Guest, Room, Invoice } from '../types';
 
@@ -65,14 +66,53 @@ describe('invoiceGenerator Tests', () => {
     room: mockRoom,
   };
 
-  it('generiert eine Standard-Hauptrechnung aus einer Reservierung', () => {
+  it('generiert eine Standard-Hauptrechnung aus einer Reservierung mit vollständiger Anschrift & Zimmer', () => {
     const inv = generateInvoiceFromReservation(mockReservation, null, [mockGuest], [mockRoom]);
     expect(inv.invoiceNumber).toBe('RE-2026-000001');
     expect(inv.reservationId).toBe(100);
     expect(inv.recipientName).toBe('Max Mustermann');
+    expect(inv.recipientSalutation).toBe('Sehr geehrter Herr Mustermann');
+    expect(inv.recipientStreet).toBe('Waldstraße 5');
+    expect(inv.recipientZip).toBe('02797');
+    expect(inv.recipientCity).toBe('Kurort Jonsdorf');
+    expect(inv.recipientCountry).toBe('Deutschland');
+    expect(inv.roomName).toBe('Zimmer 4');
+    expect(inv.roomCode).toBe('4');
+    expect(inv.nights).toBe(3);
     expect(inv.items).toBeDefined();
     expect(inv.items!.length).toBeGreaterThanOrEqual(1);
     expect(inv.totalGross).toBeGreaterThan(0);
+  });
+
+  it('hydriert eine bestehende Rechnung ohne Empfängerdaten sauber nach (hydrateInvoiceRecipient)', () => {
+    const unhydratedInvoice: Invoice = {
+      id: 999,
+      invoiceNumber: 'RE-2026-000999',
+      reservationId: 100,
+      guestId: 10,
+      invoiceDate: '2026-10-18',
+      servicePeriodStart: '2026-10-15',
+      servicePeriodEnd: '2026-10-18',
+      nights: 0,
+      netLodging: 100,
+      taxLodging: 7,
+      netService: 0,
+      taxService: 0,
+      totalGross: 107,
+      paymentMethod: 'BAR',
+      isPaid: false,
+      status: 'OFFEN',
+    };
+
+    const hydrated = hydrateInvoiceRecipient(unhydratedInvoice, mockReservation, mockGuest, mockRoom);
+    expect(hydrated.recipientName).toBe('Max Mustermann');
+    expect(hydrated.recipientSalutation).toBe('Sehr geehrter Herr Mustermann');
+    expect(hydrated.recipientStreet).toBe('Waldstraße 5');
+    expect(hydrated.recipientZip).toBe('02797');
+    expect(hydrated.recipientCity).toBe('Kurort Jonsdorf');
+    expect(hydrated.roomName).toBe('Zimmer 4');
+    expect(hydrated.roomCode).toBe('4');
+    expect(hydrated.nights).toBe(3);
   });
 
   it('erstellt eine weitere Rechnung (Zweitrechnung) mit dem gleichen Prinzip', () => {

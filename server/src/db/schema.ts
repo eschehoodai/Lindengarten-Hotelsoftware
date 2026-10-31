@@ -110,6 +110,22 @@ export const invoices = sqliteTable('invoices', {
   invoiceDate: text('invoice_date').notNull(),
   servicePeriodStart: text('service_period_start').notNull(),
   servicePeriodEnd: text('service_period_end').notNull(),
+
+  // Empfänger- und Adressdaten (DIN 5008)
+  recipientSalutation: text('recipient_salutation'),
+  recipientName: text('recipient_name'),
+  recipientCompany: text('recipient_company'),
+  recipientStreet: text('recipient_street'),
+  recipientZip: text('recipient_zip'),
+  recipientCity: text('recipient_city'),
+  recipientCountry: text('recipient_country').default('Deutschland'),
+
+  // Buchungsbezug & Zimmer
+  roomCode: text('room_code'),
+  roomName: text('room_name'),
+  nights: integer('nights').default(1),
+  billingDebitor: text('billing_debitor'),
+  closingText: text('closing_text'),
   
   // Betragsaufschlüsselung
   netLodging: real('net_lodging').notNull(),        // Netto 7%

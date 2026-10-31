@@ -116,6 +116,18 @@ async function initTables() {
       is_zugferd_generated INTEGER DEFAULT 0,
       zugferd_xml_content TEXT,
       status TEXT DEFAULT 'final',
+      recipient_salutation TEXT,
+      recipient_name TEXT,
+      recipient_company TEXT,
+      recipient_street TEXT,
+      recipient_zip TEXT,
+      recipient_city TEXT,
+      recipient_country TEXT DEFAULT 'Deutschland',
+      room_code TEXT,
+      room_name TEXT,
+      nights INTEGER DEFAULT 1,
+      billing_debitor TEXT,
+      closing_text TEXT,
       created_at TEXT NOT NULL
     );
   `);
@@ -738,6 +750,23 @@ async function seedData() {
       });
     }
   }
+
+  // Rechnungs-Empfängerdaten aus Gästen und Reservierungen anreichern
+  await client.execute(`
+    UPDATE invoices SET
+      recipient_name = (SELECT TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) FROM guests WHERE guests.id = invoices.guest_id),
+      recipient_salutation = (SELECT COALESCE(salutation || ' ' || last_name, 'Sehr geehrte Damen und Herren') FROM guests WHERE guests.id = invoices.guest_id),
+      recipient_company = (SELECT COALESCE(name_2, '') FROM guests WHERE guests.id = invoices.guest_id),
+      recipient_street = (SELECT TRIM(COALESCE(street, '') || ' ' || COALESCE(house_number, '')) FROM guests WHERE guests.id = invoices.guest_id),
+      recipient_zip = (SELECT COALESCE(zip_code, '') FROM guests WHERE guests.id = invoices.guest_id),
+      recipient_city = (SELECT COALESCE(city, '') FROM guests WHERE guests.id = invoices.guest_id),
+      recipient_country = (SELECT COALESCE(country, 'Deutschland') FROM guests WHERE guests.id = invoices.guest_id),
+      billing_debitor = (SELECT COALESCE(billing_debitor, '') FROM reservations WHERE reservations.id = invoices.reservation_id),
+      nights = (SELECT COALESCE(nights, 1) FROM reservations WHERE reservations.id = invoices.reservation_id),
+      room_name = (SELECT COALESCE(rooms.name, 'Zimmer ' || reservations.room_id) FROM reservations LEFT JOIN rooms ON rooms.id = reservations.room_id WHERE reservations.id = invoices.reservation_id),
+      room_code = (SELECT COALESCE(rooms.room_code, CAST(reservations.room_id AS TEXT)) FROM reservations LEFT JOIN rooms ON rooms.id = reservations.room_id WHERE reservations.id = invoices.reservation_id)
+    WHERE recipient_name IS NULL OR recipient_name = '';
+  `);
 
   // 7. Nummernkreise initialisieren
   await client.execute(`DELETE FROM number_sequences;`);
